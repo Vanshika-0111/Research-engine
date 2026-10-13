@@ -47,3 +47,26 @@ def markdown_table(results, cols=("hit@1", "hit@5", "ev_recall@5", "ev_recall@10
     for name, r in results.items():
         lines.append(f"| {name} | " + " | ".join(f"{r[c]:.3f}" for c in cols) + " |")
     return "\n".join(lines)
+
+
+def citation_metrics(cited, gold, evidence=()):
+    """Per-question citation scores against gold evidence chunk IDs.
+
+    citation_precision : share of cited chunks that are gold (None when nothing is cited)
+    citation_hit       : at least one cited chunk is gold
+    citation_recall    : share of gold chunks that were cited
+    evidence_recall    : share of gold chunks that reached the LLM as evidence (retrieval side)
+    """
+    cited, gold, evidence = list(dict.fromkeys(cited)), set(gold), set(evidence)
+    good = sum(c in gold for c in cited)
+    return {
+        "citation_precision": good / len(cited) if cited else None,
+        "citation_hit": float(good > 0),
+        "citation_recall": good / len(gold),
+        "evidence_recall": len(evidence & gold) / len(gold),
+    }
+
+
+def mean(values):
+    vals = [v for v in values if v is not None]
+    return round(sum(vals) / len(vals), 4) if vals else None

@@ -48,9 +48,15 @@ retrieval/
   hybrid.py               rrf(), HybridRetriever
   rerank.py               Reranker (cross-encoder), apply_scores()
   pipeline.py             RetrievalPipeline + retrieve(question, paper_id)
+agent/
+  config.py               AgentConfig (Groq model, sub-question / evidence limits)
+  llm.py                  Groq client that logs tokens + latency per call
+  prompts.py              decomposition and cited-answer prompts
+  graph.py                LangGraph: decompose -> retrieve -> answer; ResearchAgent.run()
 eval/
-  metrics.py              hit@k, evidence recall@k, MRR, section diagnostics
-  run_retrieval_eval.py   scores every stage; reproduces the table above
+  metrics.py              retrieval metrics + citation metrics
+  run_retrieval_eval.py   scores every retrieval stage; reproduces the table above
+  run_agent_eval.py       agent on sampled QASPER questions: citation accuracy, tokens, latency
 experiments/              original Day 3 / Day 4 scripts, kept for reference
 data/  cache/             generated, not committed
 results/                  metric JSONs (committed)
@@ -98,12 +104,53 @@ or from the shell: `python -m retrieval "What baselines do they compare against?
 `paper_id=None` searches the whole corpus. Each hit has `rank, chunk_id, paper_id, title, section,
 section_type, score, text`.
 
+## Research agent (Day 6)
+
+A LangGraph graph over the retriever:
+
+```
+question -> decompose (LLM, JSON: up to 3 sub-questions)
+         -> retrieve  (retrieve() for the question + each sub-question, fused with RRF, top 6 = E1..E6)
+         -> answer    (LLM answers from the evidence only, citing [E#] after each claim)
+```
+
+Citation labels are mapped back to chunk IDs, so every citation can be checked against QASPER's gold evidence.
+Each LLM call logs prompt/completion tokens and latency. LLM: Groq `openai/gpt-oss-120b` with low reasoning effort (free API key). The model is one line in `agent/config.py`;
+list the models your key can use with `Groq().models.list()`.
+
+Setup in Colab: get a key at console.groq.com -> API Keys, then add a Colab secret named `GROQ_API_KEY`.
+Commands run with `!python` can't read Colab secrets, so copy the key into an environment variable once per session:
+
+```python
+import os
+from google.colab import userdata
+os.environ["GROQ_API_KEY"] = userdata.get("GROQ_API_KEY").strip()
+```
+
+```
+!python -m agent "What datasets do they evaluate on?" --paper-id 1909.00694
+!python -m eval.run_agent_eval --n 5      # smoke test
+!python -m eval.run_agent_eval --n 20     # Day 6 numbers on dev (tune here)
+!python -m eval.run_agent_eval --n 50 --split test   # once, at the end
+```
+
+```python
+from agent import ResearchAgent
+out = ResearchAgent().run("What baselines do they compare against?", paper_id="1909.00694")
+print(out["answer"], out["cited_chunk_ids"])
+```
+
+Citation precision (share of cited chunks that are gold evidence) is a strict measure: a passage can support
+a claim without being one of QASPER's annotated evidence paragraphs. Read the per-question `.jsonl` to judge
+the misses by hand.
+
 ## Roadmap
 
 - [x] Ingest + section-aware chunking with gold evidence mapping (Days 1-2)
 - [x] BM25, dense, hybrid retrieval (Day 3)
 - [x] Cross-encoder reranking, section filtering (Day 4)
 - [x] Refactor into `retrieval/` and `eval/` packages (Day 5)
-- [ ] LangGraph agents: query decomposition, multi-hop retrieval, cross-paper evidence aggregation
+- [x] First LangGraph agent: query decomposition, fused retrieval, cited answers, citation eval (Day 6)
+- [ ] Multi-hop: sufficiency check that loops back to retrieval; cross-paper evidence aggregation
 - [ ] Cited answer generation + citation accuracy on 100 research queries
 - [ ] LLMOps evaluation: faithfulness, citation accuracy, retrieval quality, token efficiency

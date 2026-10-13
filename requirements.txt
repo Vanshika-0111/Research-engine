@@ -6,3 +6,5 @@ rank_bm25>=0.2.2
 sentence-transformers>=3.0
 requests>=2.31
 tqdm>=4.66
+langgraph>=0.2
+groq>=0.11
