@@ -1,0 +1,28 @@
+# data and caches (rebuild with ingest/ and the eval script)
+data/
+cache/
+*.npy
+*.tgz
+*.part
+
+# keep metric JSONs in results/, but not large dumps
+results/*.parquet
+results/*.npy
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# notebooks / editors / OS
+.ipynb_checkpoints/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# secrets
+.env
+*.key

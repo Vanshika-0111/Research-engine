@@ -1,0 +1,46 @@
+{
+  "split": "dev",
+  "scope": "paper",
+  "dense_model": "BAAI/bge-small-en-v1.5",
+  "reranker": "BAAI/bge-reranker-v2-m3",
+  "title": true,
+  "rerank_top": 30,
+  "n_queries": 200,
+  "n_pairs": 3455,
+  "rerank_ms_per_query": 1276.7,
+  "results": {
+    "hybrid_rrf": {
+      "hit@1": 0.345,
+      "hit@3": 0.64,
+      "hit@5": 0.765,
+      "hit@10": 0.94,
+      "ev_recall@1": 0.2527,
+      "ev_recall@3": 0.5136,
+      "ev_recall@5": 0.6461,
+      "ev_recall@10": 0.8869,
+      "mrr@10": 0.5276
+    },
+    "hybrid+rerank": {
+      "hit@1": 0.19,
+      "hit@3": 0.52,
+      "hit@5": 0.77,
+      "hit@10": 0.92,
+      "ev_recall@1": 0.1433,
+      "ev_recall@3": 0.3961,
+      "ev_recall@5": 0.6235,
+      "ev_recall@10": 0.8584,
+      "mrr@10": 0.4101
+    },
+    "hybrid+rerank_rrf": {
+      "hit@1": 0.335,
+      "hit@3": 0.635,
+      "hit@5": 0.79,
+      "hit@10": 0.94,
+      "ev_recall@1": 0.2438,
+      "ev_recall@3": 0.4973,
+      "ev_recall@5": 0.6699,
+      "ev_recall@10": 0.8887,
+      "mrr@10": 0.5195
+    }
+  }
+}

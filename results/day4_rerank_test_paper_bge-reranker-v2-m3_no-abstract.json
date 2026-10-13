@@ -1,0 +1,49 @@
+{
+  "split": "test",
+  "scope": "paper",
+  "dense_model": "BAAI/bge-small-en-v1.5",
+  "reranker": "BAAI/bge-reranker-v2-m3",
+  "title": false,
+  "excluded_sections": [
+    "abstract"
+  ],
+  "rerank_top": 30,
+  "n_queries": 1309,
+  "n_pairs": 22566,
+  "rerank_ms_per_query": 261.6,
+  "results": {
+    "hybrid_rrf": {
+      "hit@1": 0.4072,
+      "hit@3": 0.7189,
+      "hit@5": 0.8419,
+      "hit@10": 0.9672,
+      "ev_recall@1": 0.296,
+      "ev_recall@3": 0.5815,
+      "ev_recall@5": 0.7284,
+      "ev_recall@10": 0.9131,
+      "mrr@10": 0.5903
+    },
+    "hybrid+rerank": {
+      "hit@1": 0.5218,
+      "hit@3": 0.796,
+      "hit@5": 0.906,
+      "hit@10": 0.9817,
+      "ev_recall@1": 0.3923,
+      "ev_recall@3": 0.6589,
+      "ev_recall@5": 0.7953,
+      "ev_recall@10": 0.9412,
+      "mrr@10": 0.6772
+    },
+    "hybrid+rerank_rrf": {
+      "hit@1": 0.4729,
+      "hit@3": 0.7807,
+      "hit@5": 0.8892,
+      "hit@10": 0.9786,
+      "ev_recall@1": 0.3464,
+      "ev_recall@3": 0.6427,
+      "ev_recall@5": 0.7848,
+      "ev_recall@10": 0.937,
+      "mrr@10": 0.6472
+    }
+  }
+}

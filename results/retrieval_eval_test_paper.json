@@ -1,0 +1,78 @@
+{
+  "split": "test",
+  "scope": "paper",
+  "n_queries": 1309,
+  "n_chunks": 28541,
+  "config": {
+    "dense_model": "BAAI/bge-small-en-v1.5",
+    "reranker_model": "BAAI/bge-reranker-v2-m3",
+    "pool": 50,
+    "rrf_k": 60,
+    "rerank_top": 30,
+    "reranker_max_length": 512,
+    "reranker_batch_size": 64,
+    "fp16": true,
+    "exclude_sections": [
+      "abstract"
+    ]
+  },
+  "n_pairs": 22566,
+  "rerank_ms_per_query": 261.6,
+  "results": {
+    "bm25": {
+      "hit@1": 0.2544,
+      "hit@3": 0.5668,
+      "hit@5": 0.7349,
+      "hit@10": 0.9183,
+      "ev_recall@1": 0.1846,
+      "ev_recall@3": 0.4462,
+      "ev_recall@5": 0.6116,
+      "ev_recall@10": 0.8492,
+      "mrr@10": 0.4548
+    },
+    "dense": {
+      "hit@1": 0.4095,
+      "hit@3": 0.686,
+      "hit@5": 0.8243,
+      "hit@10": 0.9534,
+      "ev_recall@1": 0.2982,
+      "ev_recall@3": 0.5482,
+      "ev_recall@5": 0.6987,
+      "ev_recall@10": 0.8898,
+      "mrr@10": 0.5805
+    },
+    "hybrid_rrf": {
+      "hit@1": 0.3705,
+      "hit@3": 0.6769,
+      "hit@5": 0.8136,
+      "hit@10": 0.9587,
+      "ev_recall@1": 0.2697,
+      "ev_recall@3": 0.5389,
+      "ev_recall@5": 0.6924,
+      "ev_recall@10": 0.8962,
+      "mrr@10": 0.5575
+    },
+    "hybrid+rerank": {
+      "hit@1": 0.3904,
+      "hit@3": 0.7296,
+      "hit@5": 0.8686,
+      "hit@10": 0.9801,
+      "ev_recall@1": 0.3024,
+      "ev_recall@3": 0.5951,
+      "ev_recall@5": 0.7487,
+      "ev_recall@10": 0.9319,
+      "mrr@10": 0.5877
+    },
+    "final": {
+      "hit@1": 0.5218,
+      "hit@3": 0.796,
+      "hit@5": 0.906,
+      "hit@10": 0.9817,
+      "ev_recall@1": 0.3923,
+      "ev_recall@3": 0.6589,
+      "ev_recall@5": 0.7953,
+      "ev_recall@10": 0.9412,
+      "mrr@10": 0.6772
+    }
+  }
+}
