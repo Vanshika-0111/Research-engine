@@ -59,6 +59,8 @@ eval/
   run_agent_eval.py       agent on sampled QASPER questions: citation accuracy, tokens, latency (--tag keeps runs apart)
   inspect_agent_eval.py   side-by-side review of citation misses vs gold passages
   judge_agent_eval.py     LLM judge on saved answers: citation support, faithfulness, answer correctness
+  compare_judges.py       agreement between two judges (e.g. gpt-oss-20b vs Gemini) on the same answers
+  reference_filter.py     fixed rule that drops questions whose references only point to a citation/table
 experiments/              original Day 3 / Day 4 scripts, kept for reference
 data/  cache/             generated, not committed
 results/                  metric JSONs (committed)
@@ -161,7 +163,29 @@ agent (own daily quota, no self-grading) and only reads the saved `.jsonl`, so t
 ```
 !python -m eval.judge_agent_eval results/agent_eval_dev_n20_v2.jsonl          # judge = openai/gpt-oss-20b
 !python -m eval.judge_agent_eval results/agent_eval_dev_n20_v2.jsonl --model qwen/qwen3.8-27b
+!python -m eval.judge_agent_eval results/agent_eval_dev_n20_v2.jsonl --model gemini-3.8-flash   # Gemini API
 ```
+
+`agent/llm.py` has two providers behind one `chat()` interface: Groq (`GroqLLM`) and the Google Gemini API
+(`GeminiLLM`, needs a `GEMINI_API_KEY` env var or Colab secret). `make_llm(model)` picks Gemini for model names
+starting with `gemini`. A Gemini judge is a different model family from the gpt-oss agent, so it is not
+grading its own kind of output. Gemini 3 models are run at their default temperature (Google advises against
+lowering it), so Gemini verdicts are not fully deterministic. Per-minute 429s are waited out; a per-day quota
+stops the run cleanly and `--resume` continues.
+
+Two judges on the same answers, with exact agreement, Cohen's kappa and every disagreement listed:
+
+```
+!python -m eval.compare_judges results/agent_eval_dev_n20_v2_judge-gpt-oss-20b.jsonl \
+                               results/agent_eval_dev_n20_v2_judge-gemini-38-flash.jsonl
+```
+
+**Reference-quality filter.** Some QASPER reference answers only point elsewhere ("BIBREF9 ; BIBREF8",
+"the same datasets as BIBREF7", "Answer with content missing ..."), so no answer can match them. A fixed,
+mechanical rule (`eval/reference_filter.py`, decided before the test run) excludes a question when all its
+references are like that. Every agent and judge summary reports both the full and the filtered numbers
+(`summary` and `summary_filtered`). On dev n=50 it excludes 3 questions (Q27, Q39, Q45). To see it on any
+saved results file: `!python -m eval.reference_filter results/agent_eval_dev_n50_v2.jsonl`.
 
 ## Roadmap
 

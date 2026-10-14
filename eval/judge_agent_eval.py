@@ -19,14 +19,23 @@ Summary metrics (averaged over questions):
                                 says "Unanswerable")                                       (all questions)
     + judge tokens and errors
 
-It only reads a saved .jsonl from run_agent_eval, so it never re-runs the agent. Use a DIFFERENT Groq model
-from the agent (default openai/gpt-oss-20b): each model has its own daily token quota, and a judge that is
-not the model being graded is less likely to favour its own answers.
+It only reads a saved .jsonl from run_agent_eval, so it never re-runs the agent. Use a DIFFERENT model
+from the agent (default openai/gpt-oss-20b on Groq): each model has its own daily token quota, and a judge
+that is not the model being graded is less likely to favour its own answers. A model name starting with
+"gemini" uses the Google Gemini API instead (needs GEMINI_API_KEY), so the judge can come from a different
+model family altogether. Compare two judges with eval.compare_judges.
+
+Every summary is reported twice: on all questions and after the reference-quality filter
+(eval/reference_filter.py), which drops questions whose references only point to a citation/figure/table.
 
 Run from the project root:
     python -m eval.judge_agent_eval results/agent_eval_dev_n20_v2.jsonl
     python -m eval.judge_agent_eval results/agent_eval_dev_n20_v2.jsonl --model qwen/qwen3.8-27b
     python -m eval.judge_agent_eval results/agent_eval_dev_n50_v2.jsonl --resume
+    python -m eval.judge_agent_eval results/agent_eval_dev_n50_v2.jsonl --model gemini-3.8-flash --resume
+Gemini free tier (2026-10): 5 requests/minute and 20/day per model, and failed 503 attempts count too, so a
+Gemini run is spread over several days with --resume (13 s between calls; an overloaded model stops the run).
+If every row is already judged, --resume makes no LLM calls and just rewrites the summary (with the filter).
 Writes <input stem>_judge-<model>.jsonl (one judged row per question) and .json (summary).
 Like run_agent_eval: results are saved one question at a time, --resume continues, and Groq's daily token
 limit stops the run cleanly.
@@ -41,6 +50,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from eval.metrics import mean  # noqa: E402
+from eval.reference_filter import RULE, excluded_list, split_rows  # noqa: E402
+from agent.llm import is_overloaded  # noqa: E402
 from eval.run_agent_eval import is_daily_limit, load_rows, qkey  # noqa: E402
 
 SCORE = {"yes": 1.0, "partly": 0.5, "no": 0.0}
@@ -119,17 +130,37 @@ def is_unanswerable(refs):
     return bool(refs) and all("unanswerable" in r.lower() for r in refs)
 
 
+def summarize_judged(judged):
+    """Averages over judged rows (also used by eval.reference_filter for the filtered numbers)."""
+    n = len(judged)
+    answered = [j for j in judged if not j["declined"]]
+    return {
+        "strict_citation_precision": mean(j["strict_citation_precision"] for j in answered),
+        "judged_citation_precision": mean(j["scores"]["judged_citation_precision"] for j in answered),
+        "faithfulness": mean(j["scores"]["faithfulness"] for j in answered),
+        "answer_correctness": mean(j["scores"]["answer_correctness"] for j in judged),
+        "answer_correctness_answered_only": mean(j["scores"]["answer_correctness"] for j in answered),
+        "declined_rate": round(sum(j["declined"] for j in judged) / n, 4),
+        "judge_errors": sum(bool(j["judge"].get("error")) for j in judged),
+        "avg_judge_prompt_tokens": round(sum(j["judge_tokens"]["prompt"] for j in answered) / max(len(answered), 1)),
+        "avg_judge_completion_tokens": round(sum(j["judge_tokens"]["completion"] for j in answered) / max(len(answered), 1)),
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("jsonl", help="a results/agent_eval_*.jsonl file from run_agent_eval")
-    ap.add_argument("--model", default="openai/gpt-oss-20b", help="Groq model for the judge (not the agent's)")
+    ap.add_argument("--model", default="openai/gpt-oss-20b", help="judge model, not the agent's (gemini-* = Gemini API, else Groq)")
     ap.add_argument("--chars", type=int, default=2500, help="max characters of each cited passage")
     ap.add_argument("--max-tokens", type=int, default=1536, help="judge completion budget (includes reasoning)")
-    ap.add_argument("--pause", type=float, default=1.0, help="seconds between calls (free-tier rate limits)")
+    ap.add_argument("--pause", type=float, default=None,
+                    help="seconds between calls (default 1; 13 for gemini-*, whose free tier allows 5 requests/minute)")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--overwrite", action="store_true")
     args = ap.parse_args()
 
+    if args.pause is None:
+        args.pause = 13.0 if args.model.lower().startswith("gemini") else 1.0
     src = Path(args.jsonl)
     rows = load_rows(src)
     if not rows:
@@ -148,13 +179,16 @@ def main():
     print(f"{len(rows)} answers in {src.name} | judge={args.model}"
           + (f" | resuming: {len(done)} already judged" if done else ""))
 
-    from retrieval.data import load_chunks
-    chunks = load_chunks()
-    text = dict(zip(chunks["chunk_id"].astype(str), chunks["text"]))
-    section = dict(zip(chunks["chunk_id"].astype(str), chunks["section"]))
+    todo = [r for r in rows if qkey(r) not in done]
+    llm = text = section = None
+    if todo:   # only load the chunks and the API client if there is something to judge
+        from retrieval.data import load_chunks
+        chunks = load_chunks()
+        text = dict(zip(chunks["chunk_id"].astype(str), chunks["text"]))
+        section = dict(zip(chunks["chunk_id"].astype(str), chunks["section"]))
 
-    from agent.llm import GroqLLM
-    llm = GroqLLM(args.model, temperature=0.0, reasoning_effort="low")
+        from agent.llm import make_llm
+        llm = make_llm(args.model, temperature=0.0, reasoning_effort="low")
 
     stopped = None
     with open(out_path, "w", encoding="utf-8") as fh:
@@ -189,10 +223,11 @@ def main():
                 try:
                     reply, usage = llm.chat(msgs, max_tokens=args.max_tokens, json_mode=True)
                 except Exception as e:
-                    if not is_daily_limit(e):
+                    if not (is_daily_limit(e) or is_overloaded(e)):
                         raise
                     stopped = str(e)
-                    print(f"\nSTOPPED at {i}/{len(rows)}: Groq daily token limit reached for {args.model}. "
+                    why = "daily quota reached" if is_daily_limit(e) else "the model is overloaded (5xx after retries)"
+                    print(f"\nSTOPPED at {i}/{len(rows)}: {why} for {args.model}. "
                           f"{len(judged)} judged rows saved; run again later with --resume.")
                     break
                 verdict = parse_verdict(reply, labels)
@@ -225,27 +260,20 @@ def main():
         raise SystemExit("Nothing judged.")
     order = {qkey(r): k for k, r in enumerate(rows)}
     judged.sort(key=lambda j: order[qkey(j)])
-    answered = [j for j in judged if not j["declined"]]
-    summary = {
-        "strict_citation_precision": mean(j["strict_citation_precision"] for j in answered),
-        "judged_citation_precision": mean(j["scores"]["judged_citation_precision"] for j in answered),
-        "faithfulness": mean(j["scores"]["faithfulness"] for j in answered),
-        "answer_correctness": mean(j["scores"]["answer_correctness"] for j in judged),
-        "answer_correctness_answered_only": mean(j["scores"]["answer_correctness"] for j in answered),
-        "declined_rate": round(sum(j["declined"] for j in judged) / n, 4),
-        "judge_errors": sum(bool(j["judge"].get("error")) for j in judged),
-        "avg_judge_prompt_tokens": round(sum(j["judge_tokens"]["prompt"] for j in answered) / max(len(answered), 1)),
-        "avg_judge_completion_tokens": round(sum(j["judge_tokens"]["completion"] for j in answered) / max(len(answered), 1)),
-    }
+    summary = summarize_judged(judged)
+    kept, _ = split_rows(judged)
+    summary_filtered = summarize_judged(kept) if kept else {}
     stem.with_suffix(".json").write_text(json.dumps(
         {"source": src.name, "judge_model": args.model, "n": n, "n_planned": len(rows), "complete": n == len(rows),
-         "stopped_reason": stopped, "summary": summary}, indent=2))
+         "stopped_reason": stopped, "summary": summary,
+         "reference_filter": {"rule": RULE, "n_kept": len(kept), "excluded": excluded_list(judged)},
+         "summary_filtered": summary_filtered}, indent=2))
 
     status = "" if n == len(rows) else f"  (PARTIAL: {n} of {len(rows)}; finish with --resume)"
     print(f"\njudge={args.model}  n={n}{status}")
-    print("| metric | value |\n|---|---|")
+    print(f"| metric | full (n={n}) | reference-filtered (n={len(kept)}) |\n|---|---|---|")
     for k, v in summary.items():
-        print(f"| {k} | {v} |")
+        print(f"| {k} | {v} | {summary_filtered.get(k)} |")
 
     flagged = [j for j in judged if j["scores"]["answer_correctness"] not in (None, 1.0) and not j["declined"]
                or j["scores"]["faithfulness"] not in (None, 1.0)]

@@ -8,3 +8,4 @@ requests>=2.31
 tqdm>=4.66
 langgraph>=0.2
 groq>=0.11
+google-genai>=1.50   # Gemini API (second judge)

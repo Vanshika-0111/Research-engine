@@ -40,7 +40,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # allow `python ev
 
 from agent.config import AgentConfig  # noqa: E402
 from agent.graph import NO_ANSWER, ResearchAgent  # noqa: E402
+from agent.llm import is_daily_limit  # noqa: E402,F401  (Groq or Gemini per-day quota; judge imports it from here)
 from eval.metrics import citation_metrics, mean  # noqa: E402
+from eval.reference_filter import RULE, excluded_list, split_rows  # noqa: E402
 from retrieval.config import RESULTS_DIR  # noqa: E402
 from retrieval.data import load_questions  # noqa: E402
 from retrieval.pipeline import get_pipeline  # noqa: E402
@@ -63,10 +65,22 @@ def load_rows(path):
     return rows
 
 
-def is_daily_limit(e):
-    """Groq's per-day token/request limit (waiting a few seconds won't help, so stop and save)."""
-    msg = str(e).lower()
-    return "rate_limit" in msg and ("per day" in msg or "tpd" in msg or "rpd" in msg)
+def summarize_rows(rows):
+    """Averages over saved agent rows (also used by eval.reference_filter for the filtered numbers)."""
+    n = len(rows)
+    summary = {k: mean(r["metrics"][k] for r in rows)
+               for k in ("citation_precision", "citation_hit", "citation_recall", "evidence_recall",
+                         "single_query_recall")}
+    summary.update({
+        "no_citation_rate": round(sum(not r["cited_chunk_ids"] for r in rows) / n, 4),
+        "declined_rate": round(sum(r["declined"] for r in rows) / n, 4),
+        "invalid_citation_rate": round(sum(bool(r["invalid_labels"]) for r in rows) / n, 4),
+        "avg_sub_questions": round(sum(len(r["sub_questions"]) for r in rows) / n, 2),
+        "avg_prompt_tokens": round(sum(r["tokens"]["prompt"] for r in rows) / n),
+        "avg_completion_tokens": round(sum(r["tokens"]["completion"] for r in rows) / n),
+        "avg_secs": round(sum(r["secs"] for r in rows) / n, 2),
+    })
+    return summary
 
 
 def main():
@@ -119,7 +133,7 @@ def main():
                 if not is_daily_limit(e):
                     raise
                 stopped = str(e)
-                print(f"\nSTOPPED at question {i}/{len(sample)}: Groq daily token limit reached for {cfg.llm_model}.")
+                print(f"\nSTOPPED at question {i}/{len(sample)}: daily quota reached for {cfg.llm_model}.")
                 print(f"{len(rows)} results are saved. Later (when the limit has reset) run the same command with --resume.")
                 break
             ev_ids = [e["chunk_id"] for e in out["evidence"]]
@@ -149,28 +163,21 @@ def main():
         raise SystemExit("No results to summarise.")
     order = {qkey(q): j for j, q in enumerate(sample)}
     rows.sort(key=lambda r: order[qkey(r)])
-    summary = {k: mean(r["metrics"][k] for r in rows)
-               for k in ("citation_precision", "citation_hit", "citation_recall", "evidence_recall",
-                         "single_query_recall")}
-    summary.update({
-        "no_citation_rate": round(sum(not r["cited_chunk_ids"] for r in rows) / n, 4),
-        "declined_rate": round(sum(r["declined"] for r in rows) / n, 4),
-        "invalid_citation_rate": round(sum(bool(r["invalid_labels"]) for r in rows) / n, 4),
-        "avg_sub_questions": round(sum(len(r["sub_questions"]) for r in rows) / n, 2),
-        "avg_prompt_tokens": round(sum(r["tokens"]["prompt"] for r in rows) / n),
-        "avg_completion_tokens": round(sum(r["tokens"]["completion"] for r in rows) / n),
-        "avg_secs": round(sum(r["secs"] for r in rows) / n, 2),
-    })
+    summary = summarize_rows(rows)
+    kept, _ = split_rows(rows)
+    summary_filtered = summarize_rows(kept) if kept else {}
     stem.with_suffix(".json").write_text(json.dumps(
         {"split": args.split, "n": n, "n_planned": len(sample), "complete": n == len(sample),
          "stopped_reason": stopped, "seed": args.seed,
-         "tag": args.tag, "config": asdict(cfg), "summary": summary}, indent=2))
+         "tag": args.tag, "config": asdict(cfg), "summary": summary,
+         "reference_filter": {"rule": RULE, "n_kept": len(kept), "excluded": excluded_list(rows)},
+         "summary_filtered": summary_filtered}, indent=2))
 
     status = "" if n == len(sample) else f"  (PARTIAL: {n} of {len(sample)} done; finish with --resume)"
     print(f"\nsplit={args.split}  n={n}  model={cfg.llm_model}{status}")
-    print("| metric | value |\n|---|---|")
+    print(f"| metric | full (n={n}) | reference-filtered (n={len(kept)}) |\n|---|---|---|")
     for k, v in summary.items():
-        print(f"| {k} | {v} |")
+        print(f"| {k} | {v} | {summary_filtered.get(k)} |")
     print(f"\nSaved {stem.with_suffix('.json')} and {stem.with_suffix('.jsonl')}")
 
 
