@@ -26,3 +26,6 @@ Thumbs.db
 # secrets
 .env
 *.key
+
+# uploaded code bundles
+*.zip

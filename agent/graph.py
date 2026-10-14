@@ -3,8 +3,8 @@
     START -> decompose -> retrieve -> answer -> END
 
 decompose : the LLM splits the question into up to 3 focused search queries (JSON)
-retrieve  : retrieve() runs for the original question and each sub-question within the paper;
-            the ranked lists are fused with RRF and the top 6 chunks become evidence E1..E6
+retrieve  : the original question's top 5 chunks go in first; sub-question results (fused with RRF)
+            fill the remaining slots, up to 7 evidence chunks E1..E7
 answer    : the LLM answers from the evidence only, citing [E#] after each claim;
             labels are mapped back to chunk IDs so citations can be checked against gold evidence
 
@@ -95,15 +95,29 @@ def build_agent(pipeline, llm, config=None):
         return {"sub_questions": subs, "queries": queries, "llm_calls": [{"node": "decompose", **usage}]}
 
     def retrieve(state):
+        """Anchored merge: the original question's top `anchor_k` chunks always go in first (a plain search
+        is the strongest single signal), then sub-question results fill the remaining slots via RRF."""
         t0 = time.time()
-        runs, found_by = [], {}
-        for q in state["queries"]:
-            hits = pipeline.retrieve(q, state.get("paper_id"), k=cfg.k_per_query)
-            runs.append([h["chunk_id"] for h in hits])
+        question, paper = state["question"], state.get("paper_id")
+        found_by = {}
+
+        def search(q, k):
+            hits = pipeline.retrieve(q, paper, k=k)
             for h in hits:
                 found_by.setdefault(h["chunk_id"], {"hit": h, "queries": []})["queries"].append(q)
+            return [h["chunk_id"] for h in hits]
+
+        main = search(question, cfg.max_evidence)
+        chosen = main[:cfg.anchor_k]
+        sub_runs = [search(q, cfg.k_per_query) for q in state["queries"] if q != question]
+        for cid in rrf(sub_runs) + main[cfg.anchor_k:]:   # sub-question finds first, then the rest of main
+            if len(chosen) >= cfg.max_evidence:
+                break
+            if cid not in chosen:
+                chosen.append(cid)
+
         evidence = []
-        for n, cid in enumerate(rrf(runs)[:cfg.max_evidence], start=1):
+        for n, cid in enumerate(chosen, start=1):
             h = found_by[cid]["hit"]
             evidence.append({"label": f"E{n}", "chunk_id": cid, "section": h["section"],
                              "section_type": h["section_type"], "found_by": found_by[cid]["queries"],

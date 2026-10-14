@@ -1,0 +1,34 @@
+{
+  "split": "dev",
+  "n": 50,
+  "n_planned": 50,
+  "complete": true,
+  "stopped_reason": null,
+  "seed": 0,
+  "tag": "v2",
+  "config": {
+    "llm_model": "openai/gpt-oss-120b",
+    "temperature": 0.0,
+    "reasoning_effort": "low",
+    "max_sub_questions": 3,
+    "anchor_k": 5,
+    "k_per_query": 4,
+    "max_evidence": 7,
+    "decompose_max_tokens": 1024,
+    "max_answer_tokens": 2048
+  },
+  "summary": {
+    "citation_precision": 0.6278,
+    "citation_hit": 0.7,
+    "citation_recall": 0.5467,
+    "evidence_recall": 0.9117,
+    "single_query_recall": 0.905,
+    "no_citation_rate": 0.1,
+    "declined_rate": 0.1,
+    "invalid_citation_rate": 0.0,
+    "avg_sub_questions": 1.44,
+    "avg_prompt_tokens": 2884,
+    "avg_completion_tokens": 186,
+    "avg_secs": 18.24
+  }
+}

@@ -56,7 +56,9 @@ agent/
 eval/
   metrics.py              retrieval metrics + citation metrics
   run_retrieval_eval.py   scores every retrieval stage; reproduces the table above
-  run_agent_eval.py       agent on sampled QASPER questions: citation accuracy, tokens, latency
+  run_agent_eval.py       agent on sampled QASPER questions: citation accuracy, tokens, latency (--tag keeps runs apart)
+  inspect_agent_eval.py   side-by-side review of citation misses vs gold passages
+  judge_agent_eval.py     LLM judge on saved answers: citation support, faithfulness, answer correctness
 experiments/              original Day 3 / Day 4 scripts, kept for reference
 data/  cache/             generated, not committed
 results/                  metric JSONs (committed)
@@ -110,7 +112,7 @@ A LangGraph graph over the retriever:
 
 ```
 question -> decompose (LLM, JSON: up to 3 sub-questions)
-         -> retrieve  (retrieve() for the question + each sub-question, fused with RRF, top 6 = E1..E6)
+         -> retrieve  (question's top 5 first, then sub-question results via RRF, up to 7 = E1..E7)
          -> answer    (LLM answers from the evidence only, citing [E#] after each claim)
 ```
 
@@ -131,8 +133,13 @@ os.environ["GROQ_API_KEY"] = userdata.get("GROQ_API_KEY").strip()
 !python -m agent "What datasets do they evaluate on?" --paper-id 1909.00694
 !python -m eval.run_agent_eval --n 5      # smoke test
 !python -m eval.run_agent_eval --n 20     # Day 6 numbers on dev (tune here)
+!python -m eval.run_agent_eval --n 50 --tag v2 --resume   # continue a run stopped by Groq's daily token limit
 !python -m eval.run_agent_eval --n 50 --split test   # once, at the end
 ```
+
+Groq's free tier allows about 200k tokens per day per model (about 65 agent questions with gpt-oss-120b). Eval
+results are written one question at a time; if the daily limit is hit the run stops cleanly, and `--resume`
+continues later. An existing results file is never overwritten without `--resume` or `--overwrite`.
 
 ```python
 from agent import ResearchAgent
@@ -140,9 +147,21 @@ out = ResearchAgent().run("What baselines do they compare against?", paper_id="1
 print(out["answer"], out["cited_chunk_ids"])
 ```
 
+Review the misses side by side with the gold passages (also saved as `*_review.md`):
+
+```
+!python -m eval.inspect_agent_eval results/agent_eval_dev_n20.jsonl
+```
+
 Citation precision (share of cited chunks that are gold evidence) is a strict measure: a passage can support
-a claim without being one of QASPER's annotated evidence paragraphs. Read the per-question `.jsonl` to judge
-the misses by hand.
+a claim without being one of QASPER's annotated evidence paragraphs. The LLM judge reads what was actually
+cited and scores citation support, faithfulness and answer correctness. It uses a different Groq model from the
+agent (own daily quota, no self-grading) and only reads the saved `.jsonl`, so the agent is not re-run:
+
+```
+!python -m eval.judge_agent_eval results/agent_eval_dev_n20_v2.jsonl          # judge = openai/gpt-oss-20b
+!python -m eval.judge_agent_eval results/agent_eval_dev_n20_v2.jsonl --model qwen/qwen3.8-27b
+```
 
 ## Roadmap
 

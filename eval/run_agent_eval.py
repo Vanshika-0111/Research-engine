@@ -17,8 +17,16 @@ Metrics (averaged over questions):
 Run from the project root (needs a GROQ_API_KEY env var or Colab secret):
     python -m eval.run_agent_eval --n 5        # smoke test
     python -m eval.run_agent_eval --n 20       # Day 6 number (dev)
+    python -m eval.run_agent_eval --n 20 --tag v2   # same questions, saved as agent_eval_dev_n20_v2.*
+    python -m eval.run_agent_eval --n 50 --tag v2 --resume   # continue a run that stopped part-way
     python -m eval.run_agent_eval --n 50 --split test   # once, when prompts are final
 Outputs results/agent_eval_<split>_n<N>.json (summary) and .jsonl (every question, answer and citation).
+
+The .jsonl is written one question at a time, so a run that stops (e.g. Groq's daily token limit) keeps
+everything done so far. --resume skips questions already in the .jsonl and appends the rest; the summary
+always covers every row in the file. Without --resume an existing non-empty .jsonl is never overwritten
+unless --overwrite is given. If Groq's daily token limit is hit, the run stops cleanly and saves a partial
+summary ("complete": false).
 """
 import argparse
 import json
@@ -38,6 +46,29 @@ from retrieval.data import load_questions  # noqa: E402
 from retrieval.pipeline import get_pipeline  # noqa: E402
 
 
+def qkey(q):
+    """Identifies a question in the sample and in saved rows."""
+    return q.get("question_id") or f'{q["paper_id"]}|{q["question"]}'
+
+
+def load_rows(path):
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line:
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass  # a line cut off mid-write when a run was interrupted
+    return rows
+
+
+def is_daily_limit(e):
+    """Groq's per-day token/request limit (waiting a few seconds won't help, so stop and save)."""
+    msg = str(e).lower()
+    return "rate_limit" in msg and ("per day" in msg or "tpd" in msg or "rpd" in msg)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", default="dev", help="tune on dev; run test once at the end")
@@ -45,6 +76,9 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--model", default=None, help="override the Groq model ID")
     ap.add_argument("--pause", type=float, default=2.0, help="seconds between questions (free-tier rate limits)")
+    ap.add_argument("--tag", default="", help="suffix for the output files, e.g. v2, so earlier runs are kept")
+    ap.add_argument("--resume", action="store_true", help="skip questions already in the .jsonl and append")
+    ap.add_argument("--overwrite", action="store_true", help="start again even if the .jsonl has results")
     args = ap.parse_args()
 
     cfg = AgentConfig()
@@ -57,11 +91,37 @@ def main():
     print(f"{len(sample)} {args.split} questions | model={cfg.llm_model}")
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    stem = RESULTS_DIR / f"agent_eval_{args.split}_n{len(sample)}"
-    rows = []
-    with open(stem.with_suffix(".jsonl"), "w", encoding="utf-8") as fh:
+    stem = RESULTS_DIR / f"agent_eval_{args.split}_n{len(sample)}{'_' + args.tag if args.tag else ''}"
+    jsonl = stem.with_suffix(".jsonl")
+    rows = load_rows(jsonl) if jsonl.exists() else []
+    if rows and not (args.resume or args.overwrite):
+        raise SystemExit(f"{jsonl} already has {len(rows)} results. Use --resume to continue it, "
+                         f"--overwrite to start again, or a different --tag.")
+    if args.overwrite:
+        rows = []
+    wanted = {qkey(q) for q in sample}
+    rows = [r for r in rows if qkey(r) in wanted]
+    done = {qkey(r) for r in rows}
+    todo = [q for q in sample if qkey(q) not in done]
+    if rows:
+        print(f"resuming: {len(rows)} already done, {len(todo)} to go")
+    stopped = None
+    with open(jsonl, "w", encoding="utf-8") as fh:
+        for r in rows:   # rewrite kept rows (drops any line cut off by an interrupted run)
+            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+        fh.flush()
         for i, q in enumerate(sample, 1):
-            out = agent.run(q["question"], q["paper_id"])
+            if qkey(q) in done:
+                continue
+            try:
+                out = agent.run(q["question"], q["paper_id"])
+            except Exception as e:
+                if not is_daily_limit(e):
+                    raise
+                stopped = str(e)
+                print(f"\nSTOPPED at question {i}/{len(sample)}: Groq daily token limit reached for {cfg.llm_model}.")
+                print(f"{len(rows)} results are saved. Later (when the limit has reset) run the same command with --resume.")
+                break
             ev_ids = [e["chunk_id"] for e in out["evidence"]]
             single = [h["chunk_id"] for h in pipe.retrieve(q["question"], q["paper_id"], k=cfg.max_evidence)]
             m = citation_metrics(out["cited_chunk_ids"], q["gold"], ev_ids)
@@ -85,6 +145,10 @@ def main():
             time.sleep(args.pause)
 
     n = len(rows)
+    if n == 0:
+        raise SystemExit("No results to summarise.")
+    order = {qkey(q): j for j, q in enumerate(sample)}
+    rows.sort(key=lambda r: order[qkey(r)])
     summary = {k: mean(r["metrics"][k] for r in rows)
                for k in ("citation_precision", "citation_hit", "citation_recall", "evidence_recall",
                          "single_query_recall")}
@@ -98,9 +162,12 @@ def main():
         "avg_secs": round(sum(r["secs"] for r in rows) / n, 2),
     })
     stem.with_suffix(".json").write_text(json.dumps(
-        {"split": args.split, "n": n, "seed": args.seed, "config": asdict(cfg), "summary": summary}, indent=2))
+        {"split": args.split, "n": n, "n_planned": len(sample), "complete": n == len(sample),
+         "stopped_reason": stopped, "seed": args.seed,
+         "tag": args.tag, "config": asdict(cfg), "summary": summary}, indent=2))
 
-    print(f"\nsplit={args.split}  n={n}  model={cfg.llm_model}")
+    status = "" if n == len(sample) else f"  (PARTIAL: {n} of {len(sample)} done; finish with --resume)"
+    print(f"\nsplit={args.split}  n={n}  model={cfg.llm_model}{status}")
     print("| metric | value |\n|---|---|")
     for k, v in summary.items():
         print(f"| {k} | {v} |")

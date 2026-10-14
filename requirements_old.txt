@@ -1,4 +1,10 @@
+# torch is preinstalled in Colab; elsewhere install the build for your CUDA version first.
+numpy>=1.24
 pandas>=2.0
-pyarrow>=14
-requests
-tqdm
+pyarrow>=14.0
+rank_bm25>=0.2.2
+sentence-transformers>=3.0
+requests>=2.31
+tqdm>=4.66
+langgraph>=0.2
+groq>=0.11

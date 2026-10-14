@@ -16,9 +16,15 @@ ANSWER_SYSTEM = """You answer questions about a scientific paper using ONLY the 
 Rules:
 - Every sentence that states a fact must end with the label(s) of the passage(s) supporting it, written with plain
   ASCII square brackets exactly like [E2] or [E1][E4]. Do not use 【】 or any other bracket style.
+- Cite the passage that most directly states the fact. Do not cite passages that are only background or only
+  loosely related; one precise citation is better than several partial ones.
 - Use only labels that appear in the evidence. Never cite a passage that does not support the sentence.
 - Be concise: answer in 1-4 sentences. Short factual answers (names, numbers, yes/no) are fine.
-- If the evidence does not contain the answer, reply exactly: "The provided evidence does not answer this question."
+- Yes/no questions: if the evidence clearly implies the answer (e.g. it describes the data as English-only, or
+  shows a result one way), answer "Yes" or "No" with a one-line reason and its citation.
+- Comparisons ("by how much"): if the passages give both numbers, state them and the difference.
+- Only if no passage is relevant to the question, reply exactly:
+  "The provided evidence does not answer this question."
 - Do not use outside knowledge."""
 
 ANSWER_USER = """Question: {question}

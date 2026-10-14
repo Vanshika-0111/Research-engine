@@ -1,0 +1,19 @@
+{
+  "source": "agent_eval_dev_n20_v2.jsonl",
+  "judge_model": "openai/gpt-oss-20b",
+  "n": 20,
+  "n_planned": 20,
+  "complete": true,
+  "stopped_reason": null,
+  "summary": {
+    "strict_citation_precision": 0.713,
+    "judged_citation_precision": 0.9398,
+    "faithfulness": 1.0,
+    "answer_correctness": 0.825,
+    "answer_correctness_answered_only": 0.9167,
+    "declined_rate": 0.1,
+    "judge_errors": 0,
+    "avg_judge_prompt_tokens": 1028,
+    "avg_judge_completion_tokens": 125
+  }
+}
