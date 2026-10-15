@@ -28,3 +28,10 @@ class RetrievalConfig:
     fp16: bool = True         # half-precision reranker; only applied on a GPU
     # section types removed from the final ranking (0% of gold evidence is in abstracts)
     exclude_sections: tuple = field(default_factory=lambda: ("abstract",))
+    # Day 10: backend for CORPUS-WIDE dense search only (paper_id=None). Within-paper search is
+    # always exact numpy, so the 0.795 result does not depend on these settings.
+    # "flat" = FAISS IndexFlatIP (exact), "hnsw" = FAISS IndexHNSWFlat (approximate), "numpy" = Day 3.
+    corpus_index: str = "flat"
+    hnsw_m: int = 32
+    hnsw_ef_construction: int = 200
+    hnsw_ef_search: int = 128

@@ -3,6 +3,7 @@ numpy>=1.24
 pandas>=2.0
 pyarrow>=14.0
 rank_bm25>=0.2.2
+faiss-cpu>=1.8      # corpus-wide dense index (Day 10)
 sentence-transformers>=3.0
 requests>=2.31
 tqdm>=4.66

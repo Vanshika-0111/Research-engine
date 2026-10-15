@@ -14,7 +14,8 @@ Usage:
         print(h["rank"], h["chunk_id"], h["section"], h["score"])
 
 The first call loads the chunks, the embedding cache and both models (~1 min on a Colab GPU);
-later calls reuse them. Pass paper_id=None to search the whole corpus.
+later calls reuse them. Pass paper_id=None to search the whole corpus (dense side via FAISS,
+see RetrievalConfig.corpus_index).
 From the shell:  python -m retrieval "What baselines do they use?" --paper-id 1909.00694 -k 5
 """
 from .bm25 import BM25Index
@@ -35,7 +36,9 @@ class RetrievalPipeline:
         self.by_paper = {str(p): list(ix) for p, ix in self.chunks.groupby("paper_id").indices.items()}
 
         self.bm25 = BM25Index(self.texts)
-        self.dense = DenseIndex(self.texts, cfg.dense_model)
+        self.dense = DenseIndex(self.texts, cfg.dense_model, corpus_index=cfg.corpus_index,
+                                hnsw_m=cfg.hnsw_m, hnsw_ef_construction=cfg.hnsw_ef_construction,
+                                hnsw_ef_search=cfg.hnsw_ef_search)
         self.hybrid = HybridRetriever(self.bm25, self.dense, pool=cfg.pool, rrf_k=cfg.rrf_k)
         self._reranker = None  # loaded on first use, so cached-score evaluation never loads it
         self.excluded = set(cfg.exclude_sections or ())

@@ -44,7 +44,8 @@ retrieval/
   config.py               paths + RetrievalConfig (the frozen Day 4 settings)
   data.py                 load chunks / questions
   bm25.py                 BM25Index
-  dense.py                DenseIndex (bi-encoder, embeddings cached in cache/)
+  dense.py                DenseIndex (bi-encoder, embeddings cached in cache/; corpus-wide search via FAISS)
+  faiss_index.py          FaissIndex: IndexFlatIP (exact) or IndexHNSWFlat (approximate) over the chunk embeddings
   hybrid.py               rrf(), HybridRetriever
   rerank.py               Reranker (cross-encoder), apply_scores()
   pipeline.py             RetrievalPipeline + retrieve(question, paper_id)
@@ -61,6 +62,7 @@ eval/
   judge_agent_eval.py     LLM judge on saved answers: citation support, faithfulness, answer correctness
   compare_judges.py       agreement between two judges (e.g. gpt-oss-20b vs Gemini) on the same answers
   reference_filter.py     fixed rule that drops questions whose references only point to a citation/table
+  benchmark_faiss.py      FAISS (flat, HNSW grid) vs numpy for corpus-wide dense search: exactness, recall, latency
 experiments/              original Day 3 / Day 4 scripts, kept for reference
 data/  cache/             generated, not committed
 results/                  metric JSONs (committed)
@@ -107,6 +109,24 @@ for h in hits:
 or from the shell: `python -m retrieval "What baselines do they compare against?" --paper-id 1909.00694`.
 `paper_id=None` searches the whole corpus. Each hit has `rank, chunk_id, paper_id, title, section,
 section_type, score, text`.
+
+## FAISS for corpus-wide dense search (Day 10)
+
+Corpus-wide dense search (`paper_id=None`, the cross-paper setting) goes through a FAISS index over the cached
+bge-small-en-v1.5 chunk embeddings. `RetrievalConfig.corpus_index` picks the backend: `"flat"` (default,
+`IndexFlatIP`, exact), `"hnsw"` (`IndexHNSWFlat`, approximate; saved to `cache/faiss_hnsw_*.index`), or
+`"numpy"` (the Day 3 search). Embeddings are unit length, so inner product = cosine, the same score as before.
+Within-paper search (about 18 chunks per paper) stays exact numpy and never builds a FAISS index, so the
+frozen within-paper results above are unchanged.
+
+```
+!python -m eval.benchmark_faiss            # results/faiss_benchmark.md: flat vs numpy, HNSW M x efSearch grid
+```
+
+The benchmark encodes every dev/test question once, then compares all backends on the same vectors: whether
+FAISS flat returns the same top-k as numpy (it may swap items whose scores differ only by float rounding,
+~1e-7), gold evidence metrics, ANN recall@k of HNSW against exact search, build time, index size, and search
+latency per query.
 
 ## Research agent (Day 6)
 
@@ -194,6 +214,7 @@ saved results file: `!python -m eval.reference_filter results/agent_eval_dev_n50
 - [x] Cross-encoder reranking, section filtering (Day 4)
 - [x] Refactor into `retrieval/` and `eval/` packages (Day 5)
 - [x] First LangGraph agent: query decomposition, fused retrieval, cited answers, citation eval (Day 6)
+- [x] FAISS index for corpus-wide dense search, benchmarked against numpy (Day 10)
 - [ ] Multi-hop: sufficiency check that loops back to retrieval; cross-paper evidence aggregation
 - [ ] Cited answer generation + citation accuracy on 100 research queries
 - [ ] LLMOps evaluation: faithfulness, citation accuracy, retrieval quality, token efficiency
