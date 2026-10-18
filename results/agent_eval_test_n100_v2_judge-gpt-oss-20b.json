@@ -1,0 +1,35 @@
+{
+  "source": "agent_eval_test_n100_v2.jsonl",
+  "judge_model": "openai/gpt-oss-20b",
+  "n": 100,
+  "n_planned": 100,
+  "complete": true,
+  "stopped_reason": null,
+  "summary": {
+    "strict_citation_precision": 0.7259,
+    "judged_citation_precision": 0.9562,
+    "faithfulness": 0.9691,
+    "answer_correctness": 0.83,
+    "answer_correctness_answered_only": 0.8557,
+    "declined_rate": 0.03,
+    "judge_errors": 0,
+    "avg_judge_prompt_tokens": 1034,
+    "avg_judge_completion_tokens": 174
+  },
+  "reference_filter": {
+    "rule": "exclude a question if ALL its references either start with 'Answer with content missing' or contain a BIBREF/FIGREF/TABREF/SECREF/EQREF marker and no content word besides markers and filler words",
+    "n_kept": 100,
+    "excluded": []
+  },
+  "summary_filtered": {
+    "strict_citation_precision": 0.7259,
+    "judged_citation_precision": 0.9562,
+    "faithfulness": 0.9691,
+    "answer_correctness": 0.83,
+    "answer_correctness_answered_only": 0.8557,
+    "declined_rate": 0.03,
+    "judge_errors": 0,
+    "avg_judge_prompt_tokens": 1034,
+    "avg_judge_completion_tokens": 174
+  }
+}

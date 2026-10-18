@@ -1,0 +1,53 @@
+{
+  "split": "test",
+  "n": 100,
+  "n_planned": 100,
+  "complete": true,
+  "stopped_reason": null,
+  "seed": 0,
+  "tag": "v2",
+  "config": {
+    "llm_model": "openai/gpt-oss-120b",
+    "temperature": 0.0,
+    "reasoning_effort": "low",
+    "max_sub_questions": 3,
+    "anchor_k": 5,
+    "k_per_query": 4,
+    "max_evidence": 7,
+    "decompose_max_tokens": 1024,
+    "max_answer_tokens": 2048
+  },
+  "summary": {
+    "citation_precision": 0.7259,
+    "citation_hit": 0.8,
+    "citation_recall": 0.6167,
+    "evidence_recall": 0.848,
+    "single_query_recall": 0.8463,
+    "no_citation_rate": 0.03,
+    "declined_rate": 0.03,
+    "invalid_citation_rate": 0.0,
+    "avg_sub_questions": 1.24,
+    "avg_prompt_tokens": 2826,
+    "avg_completion_tokens": 181,
+    "avg_secs": 64.23
+  },
+  "reference_filter": {
+    "rule": "exclude a question if ALL its references either start with 'Answer with content missing' or contain a BIBREF/FIGREF/TABREF/SECREF/EQREF marker and no content word besides markers and filler words",
+    "n_kept": 100,
+    "excluded": []
+  },
+  "summary_filtered": {
+    "citation_precision": 0.7259,
+    "citation_hit": 0.8,
+    "citation_recall": 0.6167,
+    "evidence_recall": 0.848,
+    "single_query_recall": 0.8463,
+    "no_citation_rate": 0.03,
+    "declined_rate": 0.03,
+    "invalid_citation_rate": 0.0,
+    "avg_sub_questions": 1.24,
+    "avg_prompt_tokens": 2826,
+    "avg_completion_tokens": 181,
+    "avg_secs": 64.23
+  }
+}

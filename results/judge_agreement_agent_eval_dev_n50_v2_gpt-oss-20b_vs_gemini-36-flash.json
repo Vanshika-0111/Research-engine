@@ -1,0 +1,419 @@
+{
+  "agent_results": "agent_eval_dev_n50_v2",
+  "judge_a": "openai/gpt-oss-20b",
+  "judge_b": "gemini-3.6-flash",
+  "n_questions": 50,
+  "n_answered": 45,
+  "agreement": {
+    "correct": {
+      "n": 45,
+      "exact_agreement": 0.822,
+      "kappa": 0.498,
+      "lenient_agreement": 0.889,
+      "confusion_rows_A_cols_B": {
+        "yes": {
+          "yes": 32,
+          "partly": 1,
+          "no": 0
+        },
+        "partly": {
+          "yes": 2,
+          "partly": 0,
+          "no": 0
+        },
+        "no": {
+          "yes": 4,
+          "partly": 1,
+          "no": 5
+        }
+      }
+    },
+    "faithful": {
+      "n": 45,
+      "exact_agreement": 0.822,
+      "kappa": 0.151,
+      "lenient_agreement": 0.933,
+      "confusion_rows_A_cols_B": {
+        "yes": {
+          "yes": 36,
+          "partly": 1,
+          "no": 0
+        },
+        "partly": {
+          "yes": 4,
+          "partly": 1,
+          "no": 0
+        },
+        "no": {
+          "yes": 3,
+          "partly": 0,
+          "no": 0
+        }
+      }
+    },
+    "citations": {
+      "n": 72,
+      "exact_agreement": 0.819,
+      "kappa": 0.037,
+      "lenient_agreement": 0.889,
+      "confusion_rows_A_cols_B": {
+        "yes": {
+          "yes": 59,
+          "partly": 1,
+          "no": 0
+        },
+        "partly": {
+          "yes": 4,
+          "partly": 0,
+          "no": 1
+        },
+        "no": {
+          "yes": 7,
+          "partly": 0,
+          "no": 0
+        }
+      }
+    }
+  },
+  "summaries": {
+    "openai/gpt-oss-20b": {
+      "full": {
+        "strict_citation_precision": 0.6278,
+        "judged_citation_precision": 0.8787,
+        "faithfulness": 0.8778,
+        "answer_correctness": 0.68,
+        "answer_correctness_answered_only": 0.7556,
+        "declined_rate": 0.1,
+        "judge_errors": 0,
+        "avg_judge_prompt_tokens": 1109,
+        "avg_judge_completion_tokens": 170
+      },
+      "filtered": {
+        "strict_citation_precision": 0.6193,
+        "judged_citation_precision": 0.8759,
+        "faithfulness": 0.875,
+        "answer_correctness": 0.7234,
+        "answer_correctness_answered_only": 0.7727,
+        "declined_rate": 0.0638,
+        "judge_errors": 0,
+        "avg_judge_prompt_tokens": 1113,
+        "avg_judge_completion_tokens": 170
+      },
+      "n_kept": 47
+    },
+    "gemini-3.6-flash": {
+      "full": {
+        "strict_citation_precision": 0.6278,
+        "judged_citation_precision": 0.9778,
+        "faithfulness": 0.9778,
+        "answer_correctness": 0.78,
+        "answer_correctness_answered_only": 0.8667,
+        "declined_rate": 0.1,
+        "judge_errors": 0,
+        "avg_judge_prompt_tokens": 1039,
+        "avg_judge_completion_tokens": 68
+      },
+      "filtered": {
+        "strict_citation_precision": 0.6193,
+        "judged_citation_precision": 0.9773,
+        "faithfulness": 0.9773,
+        "answer_correctness": 0.8085,
+        "answer_correctness_answered_only": 0.8636,
+        "declined_rate": 0.0638,
+        "judge_errors": 0,
+        "avg_judge_prompt_tokens": 1043,
+        "avg_judge_completion_tokens": 68
+      },
+      "n_kept": 47
+    }
+  },
+  "disagreements": [
+    {
+      "q": 3,
+      "question": "by how much did nus outperform abus?",
+      "correct": [
+        "no",
+        "yes"
+      ],
+      "faithful": [
+        "yes",
+        "yes"
+      ],
+      "citations": {},
+      "note_a": "Answer differs from reference by 0.8 percentage points",
+      "note_b": "The system correctly calculates the difference between the best performing NUS and ABUS policies (93.4% - 90.0% = 3.4 percentage points) based on E1."
+    },
+    {
+      "q": 5,
+      "question": "Were any of these tasks evaluated in any previous work?",
+      "correct": [
+        "partly",
+        "yes"
+      ],
+      "faithful": [
+        "partly",
+        "yes"
+      ],
+      "citations": {
+        "E2": [
+          "partly",
+          "yes"
+        ]
+      },
+      "note_a": "E2 only supports subject‑verb agreement",
+      "note_b": "The cited passage confirms that all three tasks were evaluated in previous work using unidirectional LSTM models."
+    },
+    {
+      "q": 9,
+      "question": "How many users do they look at?",
+      "correct": [
+        "yes",
+        "yes"
+      ],
+      "faithful": [
+        "yes",
+        "yes"
+      ],
+      "citations": {
+        "E2": [
+          "no",
+          "yes"
+        ]
+      },
+      "note_a": "E2 does not support the total user count",
+      "note_b": "The system answer accurately states the number of users supported by the cited passages and matching the reference answers."
+    },
+    {
+      "q": 10,
+      "question": "What were their distribution results?",
+      "correct": [
+        "no",
+        "partly"
+      ],
+      "faithful": [
+        "no",
+        "yes"
+      ],
+      "citations": {
+        "E2": [
+          "partly",
+          "yes"
+        ],
+        "E4": [
+          "no",
+          "yes"
+        ]
+      },
+      "note_a": "The answer overstates significance for media, hashtags, and favourites, contradicting the cited passages.",
+      "note_b": "The system answer correctly identifies the statistical significance (or lack thereof) for each attribute, but conflates which dimensions were significantly different versus not significantly different into one sentence, making it slightly ambiguous compared to the reference."
+    },
+    {
+      "q": 15,
+      "question": "what is their explanation for the effectiveness of back-translation?",
+      "correct": [
+        "yes",
+        "yes"
+      ],
+      "faithful": [
+        "partly",
+        "partly"
+      ],
+      "citations": {
+        "E2": [
+          "partly",
+          "no"
+        ]
+      },
+      "note_a": "E2 does not support the learning ease claim",
+      "note_b": "Citation E2 does not support the explanation details. In E5, artificial sources are NOT on average shorter than natural ones (the text states cases where source is shorter than target are rarer)."
+    },
+    {
+      "q": 21,
+      "question": "What is the model architecture used?",
+      "correct": [
+        "yes",
+        "yes"
+      ],
+      "faithful": [
+        "partly",
+        "yes"
+      ],
+      "citations": {
+        "E1": [
+          "no",
+          "yes"
+        ]
+      },
+      "note_a": "Citation E1 does not support the deep‑learning part of the answer",
+      "note_b": "The system answer accurately describes both architectures mentioned in the paper and reference answers."
+    },
+    {
+      "q": 26,
+      "question": "What does an individual model consist of?",
+      "correct": [
+        "no",
+        "no"
+      ],
+      "faithful": [
+        "no",
+        "yes"
+      ],
+      "citations": {
+        "E1": [
+          "no",
+          "yes"
+        ]
+      },
+      "note_a": "The cited passage discusses SRL and multilingual models, not the specific Bayesian monolingual model from garg2012unsupervised.",
+      "note_b": "The system answer identifies the model as a Bayesian monolingual model from the context, but fails to mention the reference answer's specific base model (garg2012unsupervised)."
+    },
+    {
+      "q": 27,
+      "question": "what dataset is used in this paper?",
+      "correct": [
+        "no",
+        "yes"
+      ],
+      "faithful": [
+        "yes",
+        "yes"
+      ],
+      "citations": {},
+      "note_a": "The answer cites Natura 2000, but the reference answers state the datasets are the same as BIBREF7, which is not confirmed by the cited passage.",
+      "note_b": "The system answer correctly identifies the main Natura 2000 dataset mentioned in passage E2."
+    },
+    {
+      "q": 30,
+      "question": "what datasets did they use?",
+      "correct": [
+        "no",
+        "yes"
+      ],
+      "faithful": [
+        "yes",
+        "yes"
+      ],
+      "citations": {},
+      "note_a": "Answer does not match the reference datasets",
+      "note_b": "The system answer accurately identifies the training, validation, and stop-words datasets based on the cited text."
+    },
+    {
+      "q": 36,
+      "question": "what are the previous state of the art?",
+      "correct": [
+        "yes",
+        "yes"
+      ],
+      "faithful": [
+        "partly",
+        "yes"
+      ],
+      "citations": {
+        "E5": [
+          "no",
+          "yes"
+        ]
+      },
+      "note_a": "E5 does not support the cited claim",
+      "note_b": "The response accurately identifies the prior state-of-the-art systems and their performance figures as cited in the paper."
+    },
+    {
+      "q": 40,
+      "question": "How are similarities and differences between the texts from violent and non-violent religious groups analyzed?",
+      "correct": [
+        "partly",
+        "yes"
+      ],
+      "faithful": [
+        "yes",
+        "yes"
+      ],
+      "citations": {},
+      "note_a": "Missing mention of emotion detection and baseline random articles",
+      "note_b": "The system answer accurately describes how similarities and differences were analyzed using normalized word frequencies and NMF topic modeling."
+    },
+    {
+      "q": 47,
+      "question": "did they compare with other extractive summarization methods?",
+      "correct": [
+        "yes",
+        "yes"
+      ],
+      "faithful": [
+        "no",
+        "yes"
+      ],
+      "citations": {
+        "E1": [
+          "no",
+          "yes"
+        ],
+        "E2": [
+          "no",
+          "yes"
+        ]
+      },
+      "note_a": "The cited passages do not support the claim of no comparison.",
+      "note_b": "The system correctly answers 'No' and the citations support that the paper focuses on upper bound analysis rather than comparing with other extractive summarization methods."
+    },
+    {
+      "q": 48,
+      "question": "How do their models decide how much improtance to give to the output words?",
+      "correct": [
+        "no",
+        "no"
+      ],
+      "faithful": [
+        "yes",
+        "partly"
+      ],
+      "citations": {
+        "E1": [
+          "yes",
+          "partly"
+        ]
+      },
+      "note_a": "The answer correctly cites the passage but does not match the reference method.",
+      "note_b": "The system answer incorrectly states that the importance scores are for output words, whereas the cited passage and reference answers state they are for input words."
+    },
+    {
+      "q": 49,
+      "question": "What kind of issues (that are not on the forefront of computational text analysis) do they tackle?",
+      "correct": [
+        "no",
+        "yes"
+      ],
+      "faithful": [
+        "partly",
+        "yes"
+      ],
+      "citations": {
+        "E1": [
+          "partly",
+          "yes"
+        ],
+        "E2": [
+          "partly",
+          "yes"
+        ]
+      },
+      "note_a": "",
+      "note_b": "The system answer accurately draws the specific thorny issues mentioned in E1 and E2, which aligns well with the broader challenges outlined in the paper."
+    },
+    {
+      "q": 50,
+      "question": "What dataset is used?",
+      "correct": [
+        "yes",
+        "partly"
+      ],
+      "faithful": [
+        "yes",
+        "yes"
+      ],
+      "citations": {},
+      "note_a": "All claims are supported by the cited passage.",
+      "note_b": "The system answer correctly identifies the WikiBio dataset from E3, but misses mentioning the newly introduced French and German WikiBio datasets referenced in the paper."
+    }
+  ]
+}

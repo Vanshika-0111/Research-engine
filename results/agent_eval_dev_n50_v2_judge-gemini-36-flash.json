@@ -1,0 +1,51 @@
+{
+  "source": "agent_eval_dev_n50_v2.jsonl",
+  "judge_model": "gemini-3.6-flash",
+  "n": 50,
+  "n_planned": 50,
+  "complete": true,
+  "stopped_reason": null,
+  "summary": {
+    "strict_citation_precision": 0.6278,
+    "judged_citation_precision": 0.9778,
+    "faithfulness": 0.9778,
+    "answer_correctness": 0.78,
+    "answer_correctness_answered_only": 0.8667,
+    "declined_rate": 0.1,
+    "judge_errors": 0,
+    "avg_judge_prompt_tokens": 1039,
+    "avg_judge_completion_tokens": 68
+  },
+  "reference_filter": {
+    "rule": "exclude a question if ALL its references either start with 'Answer with content missing' or contain a BIBREF/FIGREF/TABREF/SECREF/EQREF marker and no content word besides markers and filler words",
+    "n_kept": 47,
+    "excluded": [
+      {
+        "q": 27,
+        "question": "what dataset is used in this paper?",
+        "reason": "only a citation/figure/table marker"
+      },
+      {
+        "q": 39,
+        "question": "What are the state of the art models?",
+        "reason": "only a citation/figure/table marker"
+      },
+      {
+        "q": 45,
+        "question": "What are the baselines?",
+        "reason": "content missing"
+      }
+    ]
+  },
+  "summary_filtered": {
+    "strict_citation_precision": 0.6193,
+    "judged_citation_precision": 0.9773,
+    "faithfulness": 0.9773,
+    "answer_correctness": 0.8085,
+    "answer_correctness_answered_only": 0.8636,
+    "declined_rate": 0.0638,
+    "judge_errors": 0,
+    "avg_judge_prompt_tokens": 1043,
+    "avg_judge_completion_tokens": 68
+  }
+}

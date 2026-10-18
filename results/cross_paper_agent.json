@@ -1,0 +1,51 @@
+{
+  "n": 19,
+  "n_planned": 19,
+  "complete": true,
+  "stopped_reason": null,
+  "config": {
+    "llm_model": "openai/gpt-oss-120b",
+    "temperature": 0.0,
+    "reasoning_effort": "low",
+    "max_papers": 10,
+    "chunks_per_paper": 2,
+    "passage_chars": 1000,
+    "rerank": true,
+    "max_answer_tokens": 3072
+  },
+  "summary": {
+    "all": {
+      "retrieved_paper_recall": 0.8397,
+      "cited_paper_recall": 0.6339,
+      "cited_paper_precision": 0.9837,
+      "avg_cited_papers": 5.05,
+      "declined_rate": 0.0,
+      "invalid_citation_rate": 0.0,
+      "avg_prompt_tokens": 4269,
+      "avg_completion_tokens": 442,
+      "avg_secs": 30.17
+    },
+    "dataset": {
+      "retrieved_paper_recall": 0.8857,
+      "cited_paper_recall": 0.6738,
+      "cited_paper_precision": 0.9857,
+      "avg_cited_papers": 4.7,
+      "declined_rate": 0.0,
+      "invalid_citation_rate": 0.0,
+      "avg_prompt_tokens": 4186,
+      "avg_completion_tokens": 410,
+      "avg_secs": 27.17
+    },
+    "topic": {
+      "retrieved_paper_recall": 0.7885,
+      "cited_paper_recall": 0.5895,
+      "cited_paper_precision": 0.9815,
+      "avg_cited_papers": 5.44,
+      "declined_rate": 0.0,
+      "invalid_citation_rate": 0.0,
+      "avg_prompt_tokens": 4360,
+      "avg_completion_tokens": 477,
+      "avg_secs": 33.51
+    }
+  }
+}

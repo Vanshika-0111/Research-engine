@@ -14,7 +14,11 @@
     "fp16": true,
     "exclude_sections": [
       "abstract"
-    ]
+    ],
+    "corpus_index": "flat",
+    "hnsw_m": 32,
+    "hnsw_ef_construction": 200,
+    "hnsw_ef_search": 128
   },
   "n_pairs": 22566,
   "rerank_ms_per_query": 261.6,
