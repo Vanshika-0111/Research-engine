@@ -46,6 +46,7 @@ retrieval/
   bm25.py                 BM25Index
   dense.py                DenseIndex (bi-encoder, embeddings cached in cache/; corpus-wide search via FAISS)
   faiss_index.py          FaissIndex: IndexFlatIP (exact) or IndexHNSWFlat (approximate) over the chunk embeddings
+  cross_paper.py          CrossPaperRetriever: corpus-wide hybrid search (+ rerank), evidence grouped by paper
   hybrid.py               rrf(), HybridRetriever
   rerank.py               Reranker (cross-encoder), apply_scores()
   pipeline.py             RetrievalPipeline + retrieve(question, paper_id)
@@ -54,6 +55,7 @@ agent/
   llm.py                  Groq client that logs tokens + latency per call
   prompts.py              decomposition and cited-answer prompts
   graph.py                LangGraph: decompose -> retrieve -> answer; ResearchAgent.run()
+  cross_paper.py          LangGraph cross-paper mode: retrieve_papers -> synthesize; CrossPaperAgent.run()
 eval/
   metrics.py              retrieval metrics + citation metrics
   run_retrieval_eval.py   scores every retrieval stage; reproduces the table above
@@ -63,6 +65,10 @@ eval/
   compare_judges.py       agreement between two judges (e.g. gpt-oss-20b vs Gemini) on the same answers
   reference_filter.py     fixed rule that drops questions whose references only point to a citation/table
   benchmark_faiss.py      FAISS (flat, HNSW grid) vs numpy for corpus-wide dense search: exactness, recall, latency
+  cross_paper_questions.jsonl  19 hand-written cross-paper questions with required / acceptable papers (frozen)
+  run_cross_paper_eval.py paper-level recall of BM25 / dense / hybrid / hybrid+rerank on those questions
+  run_cross_paper_agent_eval.py  cross-paper agent on the 19 questions: papers shown / cited, cited-paper precision
+  judge_cross_paper.py    LLM judge for cross-paper answers: citation support, faithfulness, per-paper support
 experiments/              original Day 3 / Day 4 scripts, kept for reference
 data/  cache/             generated, not committed
 results/                  metric JSONs (committed)
@@ -127,6 +133,30 @@ The benchmark encodes every dev/test question once, then compares all backends o
 FAISS flat returns the same top-k as numpy (it may swap items whose scores differ only by float rounding,
 ~1e-7), gold evidence metrics, ANN recall@k of HNSW against exact search, build time, index size, and search
 latency per query.
+
+
+## Cross-paper questions (Day 11)
+
+QASPER questions always belong to one paper. To measure the cross-paper mode, `eval/cross_paper_questions.jsonl`
+holds 19 hand-written questions that need several papers: 10 about a dataset ("Which papers run experiments on
+HotpotQA, and what does each propose?") and 9 about a topic (sarcasm detection, code-switching, question generation,
+fake news, ...). Each question lists `required_papers` (the paper runs experiments on the dataset, or the topic is
+its main subject; checked by hand) and `acceptable_papers` (minor mentions: not required, not penalised); 7.6
+required papers per question on average. The set was fixed before any cross-paper system was built.
+
+`retrieval/cross_paper.py` searches the whole corpus (BM25 + FAISS dense, RRF, optional cross-encoder) and groups
+the ranked chunks by paper. `python -m eval.run_cross_paper_eval` scores paper recall@5/10/20, precision@10 and MRR
+(`--no-rerank` skips the cross-encoder, which needs a GPU to be quick).
+
+Results (19 questions, `results/cross_paper_retrieval.md`): paper recall@10 is 0.713 for BM25, 0.725 for dense,
+0.735 for hybrid and **0.840 for hybrid + reranker** (recall@20 0.959, MRR 0.974). BM25 is better on dataset
+questions (exact names), dense on topic questions (paraphrases); the cross-encoder helps on 18 of 19 questions.
+
+**Cross-paper agent** (`agent/cross_paper.py`, a second LangGraph graph; the within-paper agent is unchanged):
+`retrieve_papers` (hybrid + reranker, top 10 papers x 2 passages) -> `synthesize` (one bullet per relevant paper,
+`[E#]` citations mapped back to chunks and papers). `python -m eval.run_cross_paper_agent_eval` runs it on the 19
+questions (papers shown vs cited, cited-paper precision; `--resume` after a daily-limit stop) and
+`python -m eval.judge_cross_paper results/cross_paper_agent.jsonl` checks citation support and faithfulness.
 
 ## Research agent (Day 6)
 

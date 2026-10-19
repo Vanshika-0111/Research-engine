@@ -7,13 +7,13 @@
   "stopped_reason": null,
   "summary": {
     "all": {
-      "judged_citation_precision": 0.9456,
-      "faithfulness": 0.7895,
+      "judged_citation_precision": 0.9101,
+      "faithfulness": 0.8158,
       "per_paper_support": 0.9316,
       "declined_rate": 0.0,
       "judge_errors": 0,
-      "avg_judge_prompt_tokens": 2242,
-      "avg_judge_completion_tokens": 196
+      "avg_judge_prompt_tokens": 2253,
+      "avg_judge_completion_tokens": 189
     },
     "dataset": {
       "judged_citation_precision": 0.9667,
@@ -25,13 +25,13 @@
       "avg_judge_completion_tokens": 185
     },
     "topic": {
-      "judged_citation_precision": 0.9222,
-      "faithfulness": 0.6667,
+      "judged_citation_precision": 0.8472,
+      "faithfulness": 0.7222,
       "per_paper_support": 0.8556,
       "declined_rate": 0.0,
       "judge_errors": 0,
-      "avg_judge_prompt_tokens": 2369,
-      "avg_judge_completion_tokens": 208
+      "avg_judge_prompt_tokens": 2393,
+      "avg_judge_completion_tokens": 194
     }
   }
 }

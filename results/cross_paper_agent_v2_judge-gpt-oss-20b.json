@@ -1,0 +1,37 @@
+{
+  "source": "cross_paper_agent_v2.jsonl",
+  "judge_model": "openai/gpt-oss-20b",
+  "n": 19,
+  "n_planned": 19,
+  "complete": true,
+  "stopped_reason": null,
+  "summary": {
+    "all": {
+      "judged_citation_precision": 0.9895,
+      "faithfulness": 0.8158,
+      "per_paper_support": 0.9895,
+      "declined_rate": 0.0,
+      "judge_errors": 0,
+      "avg_judge_prompt_tokens": 2436,
+      "avg_judge_completion_tokens": 217
+    },
+    "dataset": {
+      "judged_citation_precision": 0.98,
+      "faithfulness": 0.8,
+      "per_paper_support": 0.98,
+      "declined_rate": 0.0,
+      "judge_errors": 0,
+      "avg_judge_prompt_tokens": 2259,
+      "avg_judge_completion_tokens": 232
+    },
+    "topic": {
+      "judged_citation_precision": 1.0,
+      "faithfulness": 0.8333,
+      "per_paper_support": 1.0,
+      "declined_rate": 0.0,
+      "judge_errors": 0,
+      "avg_judge_prompt_tokens": 2632,
+      "avg_judge_completion_tokens": 201
+    }
+  }
+}
