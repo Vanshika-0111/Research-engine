@@ -1,0 +1,7 @@
+# Light test dependencies: no torch, no sentence-transformers, no API clients (models load lazily in the code).
+numpy>=1.24
+pandas>=2.0
+pyarrow>=14.0
+rank_bm25>=0.2.2
+langgraph>=0.2
+pytest>=8.0

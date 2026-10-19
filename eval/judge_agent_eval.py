@@ -58,6 +58,7 @@ SCORE = {"yes": 1.0, "partly": 0.5, "no": 0.0}
 _PREFIX = re.compile(r"^\[[^\]]*\]\s*")
 _THINK = re.compile(r"<think>.*?</think>", re.S)
 _JSON_OBJ = re.compile(r"\{.*\}", re.S)
+_LABEL_KEY = re.compile(r"E\d+", re.IGNORECASE)
 
 JUDGE_SYSTEM = """You are a strict evaluator of answers about a scientific paper.
 
@@ -117,7 +118,15 @@ def parse_verdict(text, labels):
     cites = data.get("citations") or {}
     if isinstance(cites, list):  # tolerate [{"label": "E1", "supports": "yes"}]
         cites = {str(c.get("label")): c.get("supports") for c in cites if isinstance(c, dict)}
+    # keys like "[E4]" or " e4 " -> "E4" (judges sometimes copy the brackets into the JSON keys)
+    cites = {(m.group(0).upper() if (m := _LABEL_KEY.search(str(k))) else str(k).strip()): v
+             for k, v in cites.items()} if isinstance(cites, dict) else {}
     cites = {lab: norm(cites.get(lab)) for lab in labels}
+    if any(v is None for v in cites.values()):
+        # 2026-10-19: a cited label without a yes/partly/no verdict makes the reply unusable (saved as a judge
+        # error, retried by --resume). Before, such labels were silently dropped from the citation score; the
+        # same bug was found in the cross-paper judge. Checked: no saved within-paper judgement was affected.
+        return None
     out = {"citations": cites, "faithful": norm(data.get("faithful")), "correct": norm(data.get("correct")),
            "unsupported": [str(u) for u in (data.get("unsupported") or []) if str(u).strip()],
            "note": str(data.get("note", "")).strip()}
