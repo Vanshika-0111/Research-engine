@@ -1,0 +1,84 @@
+{
+  "split": "dev",
+  "n": 50,
+  "n_planned": 50,
+  "complete": true,
+  "stopped_reason": null,
+  "seed": 0,
+  "tag": "v3hop",
+  "config": {
+    "llm_model": "openai/gpt-oss-120b",
+    "temperature": 0.0,
+    "reasoning_effort": "low",
+    "max_sub_questions": 3,
+    "anchor_k": 5,
+    "k_per_query": 4,
+    "max_evidence": 7,
+    "decompose_max_tokens": 1024,
+    "max_answer_tokens": 2048,
+    "max_hops": 1,
+    "hop_k": 4,
+    "max_extra_evidence": 3,
+    "check_chars": 500,
+    "check_max_tokens": 768
+  },
+  "summary": {
+    "citation_precision": 0.6232,
+    "citation_hit": 0.7,
+    "citation_recall": 0.5467,
+    "evidence_recall": 0.925,
+    "single_query_recall": 0.905,
+    "no_citation_rate": 0.08,
+    "declined_rate": 0.08,
+    "invalid_citation_rate": 0.0,
+    "avg_sub_questions": 1.48,
+    "avg_prompt_tokens": 4216,
+    "avg_completion_tokens": 269,
+    "avg_secs": 28.45,
+    "hop_rate": 0.4,
+    "avg_evidence_chunks": 8.1,
+    "evidence_recall_first_pass": 0.925,
+    "hopped_questions_evidence_recall_before": 0.925,
+    "hopped_questions_evidence_recall_after": 0.925
+  },
+  "reference_filter": {
+    "rule": "exclude a question if ALL its references either start with 'Answer with content missing' or contain a BIBREF/FIGREF/TABREF/SECREF/EQREF marker and no content word besides markers and filler words",
+    "n_kept": 47,
+    "excluded": [
+      {
+        "q": 27,
+        "question": "what dataset is used in this paper?",
+        "reason": "only a citation/figure/table marker"
+      },
+      {
+        "q": 39,
+        "question": "What are the state of the art models?",
+        "reason": "only a citation/figure/table marker"
+      },
+      {
+        "q": 45,
+        "question": "What are the baselines?",
+        "reason": "content missing"
+      }
+    ]
+  },
+  "summary_filtered": {
+    "citation_precision": 0.6402,
+    "citation_hit": 0.7234,
+    "citation_recall": 0.5709,
+    "evidence_recall": 0.9202,
+    "single_query_recall": 0.9202,
+    "no_citation_rate": 0.0638,
+    "declined_rate": 0.0638,
+    "invalid_citation_rate": 0.0,
+    "avg_sub_questions": 1.47,
+    "avg_prompt_tokens": 4215,
+    "avg_completion_tokens": 268,
+    "avg_secs": 28.89,
+    "hop_rate": 0.383,
+    "avg_evidence_chunks": 8.04,
+    "evidence_recall_first_pass": 0.9202,
+    "hopped_questions_evidence_recall_before": 0.9167,
+    "hopped_questions_evidence_recall_after": 0.9167
+  }
+}

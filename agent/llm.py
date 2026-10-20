@@ -183,3 +183,44 @@ class GeminiLLM:
         usage = {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens,
                  "secs": round(time.time() - t0, 3), "model": self.model}
         return text, usage
+
+
+def is_rate_limited(e):
+    """A per-minute rate limit (429 that is not a daily quota): another provider can take the call."""
+    msg = str(e).lower()
+    return (getattr(e, "status_code", None) == 429 or getattr(e, "code", None) == 429
+            or "rate_limit" in msg or "429" in msg) and not is_daily_limit(e)
+
+
+class FallbackLLM:
+    """Tries several clients in order (e.g. Groq gpt-oss-120b, then Gemini) behind the same chat() interface.
+
+    A client that hits its DAILY quota is skipped for the rest of the process; a per-minute limit or an
+    overloaded server just moves this one call to the next client. Any other error is raised. usage["model"]
+    tells which provider answered. Used by the demo app, so it keeps working when the free Groq quota runs out.
+    """
+
+    def __init__(self, llms):
+        if not llms:
+            raise ValueError("FallbackLLM needs at least one client")
+        self.llms = list(llms)
+        self.exhausted = set()   # indices of clients whose daily quota is used up
+
+    @property
+    def available(self):
+        return [llm for i, llm in enumerate(self.llms) if i not in self.exhausted]
+
+    def chat(self, messages, max_tokens=512, json_mode=False):
+        last = None
+        for i, llm in enumerate(self.llms):
+            if i in self.exhausted:
+                continue
+            try:
+                return llm.chat(messages, max_tokens=max_tokens, json_mode=json_mode)
+            except Exception as e:
+                if is_daily_limit(e):
+                    self.exhausted.add(i)
+                elif not (is_rate_limited(e) or is_overloaded(e)):
+                    raise
+                last = e
+        raise last if last else RuntimeError("all LLM providers have used up their daily quota")

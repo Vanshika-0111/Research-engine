@@ -1,0 +1,82 @@
+{
+  "split": "dev",
+  "scope": "paper",
+  "n_queries": 887,
+  "n_chunks": 28541,
+  "config": {
+    "dense_model": "BAAI/bge-small-en-v1.5",
+    "reranker_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    "pool": 50,
+    "rrf_k": 60,
+    "rerank_top": 30,
+    "reranker_max_length": 512,
+    "reranker_batch_size": 64,
+    "fp16": true,
+    "exclude_sections": [
+      "abstract"
+    ],
+    "corpus_index": "flat",
+    "hnsw_m": 32,
+    "hnsw_ef_construction": 200,
+    "hnsw_ef_search": 128
+  },
+  "n_pairs": 15105,
+  "rerank_ms_per_query": 22.3,
+  "results": {
+    "bm25": {
+      "hit@1": 0.2255,
+      "hit@3": 0.5502,
+      "hit@5": 0.7204,
+      "hit@10": 0.9188,
+      "ev_recall@1": 0.1748,
+      "ev_recall@3": 0.4587,
+      "ev_recall@5": 0.6278,
+      "ev_recall@10": 0.8747,
+      "mrr@10": 0.4287
+    },
+    "dense": {
+      "hit@1": 0.3563,
+      "hit@3": 0.6516,
+      "hit@5": 0.8072,
+      "hit@10": 0.9402,
+      "ev_recall@1": 0.2814,
+      "ev_recall@3": 0.5451,
+      "ev_recall@5": 0.7114,
+      "ev_recall@10": 0.8973,
+      "mrr@10": 0.5373
+    },
+    "hybrid_rrf": {
+      "hit@1": 0.345,
+      "hit@3": 0.6494,
+      "hit@5": 0.805,
+      "hit@10": 0.9481,
+      "ev_recall@1": 0.2707,
+      "ev_recall@3": 0.5439,
+      "ev_recall@5": 0.7099,
+      "ev_recall@10": 0.9043,
+      "mrr@10": 0.532
+    },
+    "hybrid+rerank": {
+      "hit@1": 0.3664,
+      "hit@3": 0.6708,
+      "hit@5": 0.8162,
+      "hit@10": 0.9504,
+      "ev_recall@1": 0.2902,
+      "ev_recall@3": 0.5675,
+      "ev_recall@5": 0.7249,
+      "ev_recall@10": 0.9196,
+      "mrr@10": 0.5487
+    },
+    "final": {
+      "hit@1": 0.4284,
+      "hit@3": 0.7272,
+      "hit@5": 0.8546,
+      "hit@10": 0.9639,
+      "ev_recall@1": 0.339,
+      "ev_recall@3": 0.622,
+      "ev_recall@5": 0.7698,
+      "ev_recall@10": 0.9386,
+      "mrr@10": 0.6046
+    }
+  }
+}

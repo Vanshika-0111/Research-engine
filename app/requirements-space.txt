@@ -1,0 +1,12 @@
+# Hugging Face Space (free CPU). Gradio itself comes from sdk_version in the Space README.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+numpy>=1.24
+pandas>=2.0
+pyarrow>=14.0
+rank_bm25>=0.2.2
+faiss-cpu>=1.8
+sentence-transformers>=3.0
+langgraph>=0.2
+groq>=0.11
+google-genai>=1.50

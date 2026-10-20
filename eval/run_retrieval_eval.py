@@ -11,6 +11,8 @@ Run from the project root:
     python -m eval.run_retrieval_eval --split test      # held-out number: final ev_recall@5 = 0.795
     python -m eval.run_retrieval_eval --split dev       # dev: 0.793
     python -m eval.run_retrieval_eval --limit 100       # quick smoke test
+    python -m eval.run_retrieval_eval --split dev --reranker cross-encoder/ms-marco-MiniLM-L-6-v2   # a smaller
+        # reranker (e.g. for the CPU demo app); saved as retrieval_eval_dev_paper_rr-<model>.json, frozen files untouched
 
 Reranker scores are cached in cache/ under the same file names Day 4 used, so if the Day 4 cache is
 there the test number reproduces in about a minute without running the cross-encoder.
@@ -38,8 +40,9 @@ EXPECTED_R5 = {"test": 0.795, "dev": 0.793}
 
 def cached_rerank_scores(pipe, pairs, split, scope, n_queries, refresh=False):
     cfg = pipe.config
+    length = "" if cfg.reranker_max_length == 512 else f"_len{cfg.reranker_max_length}"
     cache = CACHE_DIR / (f"rerank_{cfg.reranker_model.replace('/', '_')}_{split}_{scope}"
-                         f"_top{cfg.rerank_top}_n{n_queries}.npy")
+                         f"_top{cfg.rerank_top}_n{n_queries}{length}.npy")
     meta_path = cache.with_suffix(".json")
     digest = hashlib.sha1("\x1e".join(q + "\x1f" + t for q, t in pairs).encode("utf-8")).hexdigest()
     meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
@@ -65,9 +68,18 @@ def main():
     ap.add_argument("--limit", type=int, default=None, help="evaluate only the first N questions")
     ap.add_argument("--refresh-cache", action="store_true", help="re-run the reranker even if scores are cached")
     ap.add_argument("--diagnostics", action="store_true", help="print section type at rank 1 vs gold")
+    ap.add_argument("--reranker", default=None, help="another cross-encoder (default: the frozen bge-reranker-v2-m3)")
+    ap.add_argument("--max-length", type=int, default=None, help="reranker max tokens per pair (default 512)")
     args = ap.parse_args()
 
     cfg = RetrievalConfig()
+    tag = ""
+    if args.reranker:
+        cfg.reranker_model = args.reranker
+        tag += "_rr-" + args.reranker.split("/")[-1]
+    if args.max_length:
+        cfg.reranker_max_length = args.max_length
+        tag += f"_len{args.max_length}"
     chunks = load_chunks()
     queries = load_questions(args.split, set(chunks["chunk_id"]), args.limit)
     print(f"{len(chunks)} chunks | {chunks.paper_id.nunique()} papers | "
@@ -115,7 +127,7 @@ def main():
     ms = 1000 * rerank_secs / max(1, len(queries))
     print(f"\nRerank cost: {len(pairs)} pairs, {ms:.0f} ms/question" + (" (from cache)" if from_cache else ""))
 
-    expected = EXPECTED_R5.get(args.split) if (args.scope == "paper" and not args.limit) else None
+    expected = EXPECTED_R5.get(args.split) if (args.scope == "paper" and not args.limit and not tag) else None
     if expected is not None:
         got = results["final"]["ev_recall@5"]
         ok = abs(got - expected) <= 0.002
@@ -133,7 +145,7 @@ def main():
                   + "  ".join(f"{n}={shares[n].get(t, 0):.2f}" for n in systems))
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out = RESULTS_DIR / f"retrieval_eval_{args.split}_{args.scope}{f'_n{args.limit}' if args.limit else ''}.json"
+    out = RESULTS_DIR / f"retrieval_eval_{args.split}_{args.scope}{f'_n{args.limit}' if args.limit else ''}{tag}.json"
     out.write_text(json.dumps(dict(
         split=args.split, scope=args.scope, n_queries=len(queries), n_chunks=len(chunks),
         config={k: (list(v) if isinstance(v, tuple) else v) for k, v in vars(cfg).items()},

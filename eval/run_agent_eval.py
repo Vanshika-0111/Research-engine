@@ -20,6 +20,7 @@ Run from the project root (needs a GROQ_API_KEY env var or Colab secret):
     python -m eval.run_agent_eval --n 20 --tag v2   # same questions, saved as agent_eval_dev_n20_v2.*
     python -m eval.run_agent_eval --n 50 --tag v2 --resume   # continue a run that stopped part-way
     python -m eval.run_agent_eval --n 50 --split test   # once, when prompts are final
+    python -m eval.run_agent_eval --n 50 --tag v3hop --multihop --resume   # Day 14 multi-hop agent (dev)
 Outputs results/agent_eval_<split>_n<N>.json (summary) and .jsonl (every question, answer and citation).
 
 The .jsonl is written one question at a time, so a run that stops (e.g. Groq's daily token limit) keeps
@@ -83,6 +84,19 @@ def summarize_rows(rows):
     return summary
 
 
+def multihop_summary(rows):
+    """Extra numbers for the multi-hop agent: how often it searched again and what the extra hop added."""
+    n = len(rows)
+    hopped = [r for r in rows if r.get("hops", 0) > 0]
+    return {
+        "hop_rate": round(len(hopped) / n, 4),
+        "avg_evidence_chunks": round(sum(len(r["evidence_chunk_ids"]) for r in rows) / n, 2),
+        "evidence_recall_first_pass": mean(r["metrics"].get("evidence_recall_first_pass") for r in rows),
+        "hopped_questions_evidence_recall_before": mean(r["metrics"].get("evidence_recall_first_pass") for r in hopped),
+        "hopped_questions_evidence_recall_after": mean(r["metrics"]["evidence_recall"] for r in hopped),
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", default="dev", help="tune on dev; run test once at the end")
@@ -93,16 +107,24 @@ def main():
     ap.add_argument("--tag", default="", help="suffix for the output files, e.g. v2, so earlier runs are kept")
     ap.add_argument("--resume", action="store_true", help="skip questions already in the .jsonl and append")
     ap.add_argument("--overwrite", action="store_true", help="start again even if the .jsonl has results")
+    ap.add_argument("--multihop", action="store_true",
+                    help="Day 14 multi-hop agent (sufficiency check + follow-up search); needs --tag")
     args = ap.parse_args()
 
-    cfg = AgentConfig()
+    if args.multihop and not args.tag:
+        raise SystemExit("Use --tag with --multihop (e.g. --tag v3hop) so the frozen v2 results are kept.")
+    if args.multihop:
+        from agent.multihop import MultiHopAgent, MultiHopConfig
+        cfg = MultiHopConfig()
+    else:
+        cfg = AgentConfig()
     if args.model:
         cfg.llm_model = args.model
     pipe = get_pipeline()
     questions = load_questions(args.split, set(pipe.chunk_ids))
     sample = random.Random(args.seed).sample(questions, min(args.n, len(questions)))
-    agent = ResearchAgent(cfg, pipeline=pipe)
-    print(f"{len(sample)} {args.split} questions | model={cfg.llm_model}")
+    agent = (MultiHopAgent if args.multihop else ResearchAgent)(cfg, pipeline=pipe)
+    print(f"{len(sample)} {args.split} questions | model={cfg.llm_model}" + (" | multi-hop" if args.multihop else ""))
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     stem = RESULTS_DIR / f"agent_eval_{args.split}_n{len(sample)}{'_' + args.tag if args.tag else ''}"
@@ -149,12 +171,21 @@ def main():
                 "declined": out["answer"].strip() == NO_ANSWER,
                 "tokens": out["tokens"], "secs": out["secs"], "metrics": m,
             }
+            if args.multihop:
+                first = [e["chunk_id"] for e in out["evidence"] if e.get("hop", 0) == 0]
+                m["evidence_recall_first_pass"] = len(set(first) & set(q["gold"])) / len(q["gold"])
+                row.update({"hops": out.get("hops", 0), "sufficient": out.get("sufficient"),
+                            "missing": out.get("missing", ""), "follow_up_query": out.get("follow_up_query", ""),
+                            "hop_log": out.get("hop_log", []),
+                            "evidence_hops": [e.get("hop", 0) for e in out["evidence"]]})
             rows.append(row)
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
             fh.flush()
             p = m["citation_precision"]
+            hop = (f" hops={row['hops']}" + (f" ev_rec_1st={m['evidence_recall_first_pass']:.2f}" if row["hops"] else "")
+                   if args.multihop else "")
             print(f"[{i:>3}/{len(sample)}] cite_prec={'-' if p is None else f'{p:.2f}'} "
-                  f"ev_rec={m['evidence_recall']:.2f} tokens={sum(out['tokens'].values())} {out['secs']}s"
+                  f"ev_rec={m['evidence_recall']:.2f}{hop} tokens={sum(out['tokens'].values())} {out['secs']}s"
                   f"  {q['question'][:60]}")
             time.sleep(args.pause)
 
@@ -166,6 +197,10 @@ def main():
     summary = summarize_rows(rows)
     kept, _ = split_rows(rows)
     summary_filtered = summarize_rows(kept) if kept else {}
+    if args.multihop:
+        summary.update(multihop_summary(rows))
+        if kept:
+            summary_filtered.update(multihop_summary(kept))
     stem.with_suffix(".json").write_text(json.dumps(
         {"split": args.split, "n": n, "n_planned": len(sample), "complete": n == len(sample),
          "stopped_reason": stopped, "seed": args.seed,
