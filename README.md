@@ -1,250 +1,243 @@
 # Agentic Research & Evidence Synthesis Engine
 
-Question answering over scientific papers with cited evidence. A retrieval stack built for scientific text
-(section-aware chunks, BM25, dense embeddings, cross-encoder reranking) feeds LangGraph research agents that
-break a question into parts, retrieve over several hops, and combine evidence across papers.
+[![tests](https://github.com/Vanshika-0111/Research-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/Vanshika-0111/Research-engine/actions/workflows/tests.yml)
+[![Results explorer on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Spaces-results%20explorer-4f46e5)](https://huggingface.co/spaces/Vanshika-0111/research-evidence-engine)
 
-**Targets:** >85% citation accuracy and >75% evidence Recall@5 over 100 research queries, plus LLMOps
-evaluation of faithfulness, citation accuracy, retrieval quality and token use.
+Question answering over **1,585 NLP research papers** (QASPER) where every claim cites the passage it comes from.
+A retrieval stack built for scientific text (section-aware chunks, BM25, dense embeddings with FAISS, cross-encoder
+reranking) feeds **LangGraph agents** that decompose questions, answer within one paper or across many, and are
+evaluated with an **LLM-as-judge pipeline validated against a second model family**.
 
-## Retrieval results (QASPER, within-paper)
+**[Browse every evaluated answer →](https://huggingface.co/spaces/Vanshika-0111/research-evidence-engine)**
+(clickable citations, QASPER gold passages and the judge's verdict on each citation) · **[Full report →](REPORT.md)**
 
-Corpus: 1,585 QASPER papers -> 28,541 section-aware chunks. Gold evidence is QASPER's annotated evidence
-paragraphs mapped to chunk IDs. Evidence Recall@k = share of a question's gold chunks found in the top k, averaged.
+| target | result (held out, chosen on dev, test run once) |
+|---|---|
+| evidence Recall@5 > 75% | **0.795** on 1,309 test questions (BM25 0.612) |
+| citation accuracy > 85% on 100 research queries | **95.6%** LLM-judged (72.6% strict vs QASPER gold), 100 test questions |
+| faithfulness / answer correctness | **96.9%** / **83%** (LLM judge, 100 test questions) |
+| cross-paper evidence aggregation | **84%** of required papers retrieved in the top 10 (BM25 71%); **98%** of cited papers correct |
+| LLM-as-judge validity | **82%** verdict agreement with a judge from another model family (Gemini); headline numbers use the stricter one |
+| multi-hop retrieval | built and ablated on dev: **no gain** at +46% tokens, so the single-pass agent stays the default |
+| token efficiency | **~3.0k tokens / question** (2 LLM calls); full table [below](#token-efficiency) |
 
-| split | n | system | R@5 | R@10 | hit@1 | MRR@10 | ms/q |
-|---|---|---|---|---|---|---|---|
-| dev | 887 | BM25 | 0.628 | 0.875 | 0.226 | 0.429 | |
-| dev | 887 | Dense (bge-small-en-v1.5) | 0.711 | 0.897 | 0.356 | 0.537 | |
-| dev | 887 | Hybrid RRF | 0.710 | 0.904 | 0.345 | 0.532 | |
-| dev | 887 | Hybrid + bge-reranker-v2-m3 | 0.748 | 0.934 | 0.356 | 0.550 | 256 |
-| dev | 887 | + abstracts excluded | 0.793 | 0.943 | 0.466 | 0.631 | 256 |
-| **test (held out)** | **1309** | **final pipeline** | **0.795** | **0.941** | **0.522** | **0.677** | **262** |
+![Results explorer: a cross-paper answer with required papers, citations and per-paper judge verdicts](docs/explorer_cross_paper.png)
 
-All choices were made on dev; test was run once at the end. Evidence Recall@5 of 0.795 is above the 0.75 target.
+## Architecture
 
-**Final pipeline:** BM25 top-50 + dense top-50 (within the paper) -> RRF (k=60) -> bge-reranker-v2-m3 (fp16)
-re-scores the top 30 -> abstract chunks removed.
-
-What drove the choices:
-- Dense beats BM25 within a paper; BM25 beats dense across the whole corpus, where hybrid is best.
-- bge-reranker-base gave no gain; bge-reranker-v2-m3 added +3.8 R@5.
-- Adding the paper title to the reranker query hurt both rerankers, so it is not used.
-- None of the gold evidence is in abstracts, yet the reranker put an abstract first for 31% of questions.
-  Removing abstracts from the ranking added +4.5 R@5.
-- fp16 reranking gives the same recall at ~5x the speed (1246 -> 256 ms/question on a T4).
-
-## Layout
-
-```
-ingest/
-  download_qasper.py      QASPER v0.3 -> data/raw/
-  build_chunks.py         section-aware chunks + gold chunk IDs -> data/processed/
-retrieval/
-  config.py               paths + RetrievalConfig (the frozen Day 4 settings)
-  data.py                 load chunks / questions
-  bm25.py                 BM25Index
-  dense.py                DenseIndex (bi-encoder, embeddings cached in cache/; corpus-wide search via FAISS)
-  faiss_index.py          FaissIndex: IndexFlatIP (exact) or IndexHNSWFlat (approximate) over the chunk embeddings
-  cross_paper.py          CrossPaperRetriever: corpus-wide hybrid search (+ rerank), evidence grouped by paper
-  hybrid.py               rrf(), HybridRetriever
-  rerank.py               Reranker (cross-encoder), apply_scores()
-  pipeline.py             RetrievalPipeline + retrieve(question, paper_id)
-agent/
-  config.py               AgentConfig (Groq model, sub-question / evidence limits)
-  llm.py                  Groq client that logs tokens + latency per call
-  prompts.py              decomposition and cited-answer prompts
-  graph.py                LangGraph: decompose -> retrieve -> answer; ResearchAgent.run()
-  cross_paper.py          LangGraph cross-paper mode: retrieve_papers -> synthesize; CrossPaperAgent.run()
-eval/
-  metrics.py              retrieval metrics + citation metrics
-  run_retrieval_eval.py   scores every retrieval stage; reproduces the table above
-  run_agent_eval.py       agent on sampled QASPER questions: citation accuracy, tokens, latency (--tag keeps runs apart)
-  inspect_agent_eval.py   side-by-side review of citation misses vs gold passages
-  judge_agent_eval.py     LLM judge on saved answers: citation support, faithfulness, answer correctness
-  compare_judges.py       agreement between two judges (e.g. gpt-oss-20b vs Gemini) on the same answers
-  reference_filter.py     fixed rule that drops questions whose references only point to a citation/table
-  benchmark_faiss.py      FAISS (flat, HNSW grid) vs numpy for corpus-wide dense search: exactness, recall, latency
-  cross_paper_questions.jsonl  19 hand-written cross-paper questions with required / acceptable papers (frozen)
-  run_cross_paper_eval.py paper-level recall of BM25 / dense / hybrid / hybrid+rerank on those questions
-  run_cross_paper_agent_eval.py  cross-paper agent on the 19 questions: papers shown / cited, cited-paper precision
-  judge_cross_paper.py    LLM judge for cross-paper answers: citation support, faithfulness, per-paper support
-experiments/              original Day 3 / Day 4 scripts, kept for reference
-data/  cache/             generated, not committed
-results/                  metric JSONs (committed)
+```mermaid
+flowchart LR
+  subgraph Ingest
+    Q[QASPER v0.3<br/>1,585 papers] --> C[section-aware chunks<br/>28,541 + gold chunk IDs]
+  end
+  subgraph Retrieval
+    C --> B[BM25]
+    C --> D[bge-small-en-v1.5<br/>numpy within a paper · FAISS corpus-wide]
+    B --> F[RRF fusion]
+    D --> F
+    F --> R[bge-reranker-v2-m3<br/>cross-encoder]
+    R --> X[drop abstracts]
+  end
+  subgraph Agents["LangGraph agents"]
+    X --> W["one paper (gpt-oss-120b): decompose → retrieve → answer [E#]"]
+    X --> M["multi-hop (ablation): … → check → follow-up search → answer"]
+    X --> P["across papers: retrieve_papers → synthesize"]
+  end
+  subgraph Evaluation
+    W & M & P --> J["LLM judge gpt-oss-20b<br/>citation support · faithfulness · correctness"]
+    J --> G[second judge: Gemini<br/>agreement analysis]
+  end
 ```
 
-## Running in Colab
+## Results
+
+### Retrieval (within the question's paper)
+
+![Evidence Recall@5 by retrieval stage](docs/retrieval_stages.png)
+
+| split | n | system | R@5 | R@10 | hit@1 | MRR@10 |
+|---|---|---|---|---|---|---|
+| dev | 887 | BM25 | 0.628 | 0.875 | 0.226 | 0.429 |
+| dev | 887 | Dense (bge-small-en-v1.5) | 0.711 | 0.897 | 0.356 | 0.537 |
+| dev | 887 | Hybrid RRF | 0.710 | 0.904 | 0.345 | 0.532 |
+| dev | 887 | + bge-reranker-v2-m3 | 0.748 | 0.934 | 0.356 | 0.550 |
+| dev | 887 | + abstracts excluded | 0.793 | 0.943 | 0.466 | 0.631 |
+| **test (held out)** | **1,309** | **final pipeline** | **0.795** | **0.941** | **0.522** | **0.677** |
+
+What drove the choices (all on dev): the cross-encoder added +3.8 R@5 (bge-reranker-base gave none); none of the
+gold evidence is in abstracts, yet the reranker ranked an abstract first for 31% of questions, so abstracts are
+dropped after reranking (+4.5); prepending the paper title to the reranker query hurt; fp16 reranking keeps recall
+identical at ~5× the speed (262 ms/question on a T4). Test was run once at the end: 0.795 vs 0.793 on dev.
+
+### One-paper agent (100 random held-out test questions)
+
+`decompose → retrieve → answer`: the question is split into up to 3 search queries; the question's own top 5
+passages always go in first (anchored merge, which fixed a recall loss from naive fusion of sub-query results),
+sub-query results fill up to 7 passages (E1–E7); gpt-oss-120b answers only from them and cites `[E#]` after every
+claim. Labels are mapped back to chunk IDs, so each citation can be scored.
+
+| metric | test, n=100 | dev, n=50 |
+|---|---|---|
+| **citation accuracy (LLM-judged: the cited passage supports the sentence)** | **0.956** | 0.879 |
+| citation precision, strict (cited chunk is QASPER's gold chunk) | 0.726 | 0.628 |
+| faithfulness (all claims supported) | 0.969 | 0.878 |
+| answer correctness, all / answered only | 0.830 / 0.856 | 0.680 / 0.756 |
+| evidence recall of the 7 passages | 0.848 | 0.912 |
+| declined | 0.03 | 0.10 |
+
+Strict precision undercounts: QASPER marks one gold paragraph per fact while other passages often state it too (a
+manual review of the dev misses found most were valid support). Both numbers are reported. Every one of the 100
+answers, with its verdicts, is browsable in the [explorer](https://huggingface.co/spaces/Vanshika-0111/research-evidence-engine).
+
+### LLM-as-judge validation
+
+The judge (gpt-oss-20b) is from the same family as the agent, so a second judge from another family (Gemini 3.6
+Flash) graded the same 50 dev answers: **82% exact agreement** on correctness, faithfulness and citations. In 14 of
+the 15 disagreements gpt-oss-20b was the *stricter* judge, and on the 8 disagreements with an independent manual
+verdict it matched the human on 6. Headline numbers therefore use the stricter judge; Gemini's are an upper bound.
+Re-running the same agent also showed a **run-to-run noise floor of about ±10 points** in answer correctness at
+n=50, so small single-run differences are not over-read.
+
+### Cross-paper agent (19 hand-labelled questions)
+
+![Required papers found in the top 10](docs/cross_paper_retrieval.png)
+
+QASPER questions always belong to one paper, so 19 multi-paper questions were written and labelled by hand before
+any cross-paper system existed (10 "which papers run experiments on dataset X", 9 topic questions; 145 required
+papers). `retrieve_papers` searches all 28.5k chunks (BM25 + FAISS, RRF, cross-encoder over the top 100) and
+groups them into the top 10 papers × 2 passages; `synthesize` writes one cited bullet per relevant paper.
+
+| metric | v1 (first run) | v2 (prompt revised after v1 error analysis) |
+|---|---|---|
+| required papers shown to the LLM (retrieval ceiling) | 0.840 | 0.840 |
+| required papers cited in the answer | 0.634 | 0.657 |
+| cited papers that are correct (required or acceptable) | 0.984 | 0.979 |
+| citation support (judge) | 0.910 | **0.990** |
+| faithfulness (judge) | 0.816 | 0.816 |
+
+v1 is the untuned result; v2 is not held out. v2 stopped claims taken from paper *titles* rather than passages
+(citation support 0.91 → 0.99) but not the main weakness: answers stop at about five papers and skip roughly 1 in
+4 required papers they were shown. A per-paper map-reduce node is the structural fix (future work).
+
+### Multi-hop ablation (dev, same 50 questions)
+
+A `check` node reads the evidence and, if a specific piece is missing, writes one follow-up search (up to 3 new
+passages, E8–E10); decompose/retrieve/answer are unchanged, so any difference comes from the hop.
+
+| | single pass (v2) | multi-hop |
+|---|---|---|
+| evidence recall | 0.912 | 0.925 |
+| answer correctness (judge) | 0.68 | 0.77 |
+| agent tokens / question | 3,070 | 4,485 (+46%) |
+| searched again | – | 40% |
+
+The correctness gain is **not** from the hop: **0 of 20** hopped answers cite a passage the follow-up search
+found, and correctness rose *more* on the 30 questions that did not search again (0.767 → 0.867) than on those
+that did. First-pass recall is already above 0.9, so the check mostly asks for details the paper does not contain.
+The single-pass agent stays the default; multi-hop is an option (`--multihop`, app switch).
+
+![Multi-hop trace in the app: passages found by the follow-up search are marked](docs/app_multihop_trace.png)
+
+### Token efficiency
+
+From `python -m eval.token_report` (tokens include gpt-oss-120b's hidden reasoning):
+
+| system | split | LLM calls / q | agent tokens / q | judge tokens / q | agent tokens per correct answer |
+|---|---|---|---|---|---|
+| one-paper agent | test, n=100 | 2 | 3,007 | 1,208 | 3,623 |
+| one-paper agent | dev, n=50 | 2 | 3,070 | 1,279 | 4,515 |
+| multi-hop agent | dev, n=50 | 3 | 4,485 | 1,275 | 5,825 |
+| cross-paper agent v2 | 19 questions | 1 | 4,909 | 2,653 | – |
+
+Evaluation runs are resumable and token-budgeted: the free Groq tier allows ~200k tokens/day per model, so every
+eval writes one row at a time, stops cleanly at the daily limit and continues with `--resume`.
+
+### Deployment: reranker quality vs CPU latency
+
+![Reranker quality vs CPU latency](docs/reranker_cpu_tradeoff.png)
+
+bge-reranker-v2-m3 needs ~100 s per question on a 2-core CPU. For CPU hosting the app can use a smaller
+cross-encoder: **MiniLM-L-6 keeps 97% of the dev Recall@5 (0.770 vs 0.793) at ~27× lower latency** (3.9 s);
+bge-reranker-base at 256 tokens is worse than no reranker at all. All reported results use v2-m3 on a GPU.
+
+## Demo
+
+* **[Results explorer](https://huggingface.co/spaces/Vanshika-0111/research-evidence-engine)** (Hugging Face
+  Space): all 100 held-out answers, the 50 multi-hop answers and the 19 cross-paper answers with clickable
+  citations, gold passages, reference answers and judge verdicts; filters for correct / partly / wrong / declined;
+  shareable links per answer. Since mid-2026 Hugging Face charges for Gradio Spaces, so the free Space is static
+  and shows saved results (`python -m app.build_static && python -m app.deploy_static`).
+* **Live app** (Gradio, `app/`): ask about one paper (optional multi-hop) or across papers; clickable citations,
+  agent trace (queries, sufficiency check, tokens, latency, which LLM answered), precomputed examples, answer cache,
+  per-session and per-day caps, and a **Groq → Gemini fallback** when the Groq daily quota runs out.
+  Run it in Colab with a public link: `python -m app.app --share`. On a paid Space: `python -m app.deploy_space
+  --reranker cross-encoder/ms-marco-MiniLM-L-6-v2 --reranker-dev-r5 0.770`.
+
+## Evaluation design
+
+* **Dev/test discipline.** Every choice was made on dev; the agent was frozen before the single 100-question test
+  run (seed 0); retrieval test numbers were produced once and reproduce exactly.
+* **Two citation metrics.** Strict (cited chunk = QASPER gold) and judged (does the cited passage support the
+  sentence?), always reported together.
+* **Judge checks.** Second judge from a different model family; a manual review of disagreements; a bug where a
+  judge reply that skipped some citations was silently scored on the rest was found, fixed (retry, then error) and
+  unit-tested; the test run was verified unaffected.
+* **Reference-quality filter.** A fixed rule, decided before the test run, drops questions whose QASPER references
+  only point elsewhere ("BIBREF9 ; BIBREF8"); every summary reports full and filtered numbers (it excluded 0 of the
+  100 test questions).
+* **Engineering.** 66 pytest tests (no GPU, models, data or keys: citation parsing, metrics, retrieval pieces,
+  both judges, both LangGraph graphs end to end with fakes, the app's engine and fallback) run in GitHub Actions on
+  every push.
+
+## Limitations
+
+* **Premise mismatch.** Asked about something a paper does not contain (an acronym from another paper), the agent
+  can invent a meaning and cite a real but unrelated sentence instead of declining. QASPER questions always match
+  their paper, so this is not measured.
+  ![The agent invents an expansion for "ELS" on a paper that never mentions it](docs/limitation_premise_mismatch.png)
+* The judge is an LLM; agreement with a second family and the manual checks bound, but do not remove, its error.
+* The cross-paper set is small (19 questions) and its v2 prompt is not held out; v1 is the reported untuned result.
+* Test latency is not reported: part of the test run had to use a CPU; per-question time is mostly API pacing.
+
+## Repository layout
+
+```
+ingest/       download QASPER; section-aware chunks + gold chunk IDs
+retrieval/    BM25, dense (+ FAISS), RRF, cross-encoder, pipeline (frozen Day 4 settings), cross-paper retriever
+agent/        LangGraph graphs: graph.py (one paper), multihop.py, cross_paper.py; llm.py (Groq, Gemini, fallback)
+eval/         retrieval eval, agent eval, judges, judge agreement, reference filter, FAISS benchmark,
+              cross-paper evals, token report; cross_paper_questions.jsonl (19 labelled questions)
+app/          Gradio app, engine, rendering, examples builder, CPU benchmark, Space deploy (Gradio + static explorer)
+tests/        66 pytest tests (CI: .github/workflows/tests.yml)
+results/      every metric JSON / JSONL behind the numbers above, plus results-log.md
+docs/         charts (make_charts.py) and screenshots
+notebooks/    the Colab notebooks, one per day of work, with WHAT/WHY notes in every cell
+REPORT.md     method, evaluation design, results, error analysis, limitations
+```
+
+## Reproduce (Colab)
 
 ```python
-from google.colab import drive
-drive.mount("/content/drive")
+from google.colab import drive; drive.mount("/content/drive")
 %cd /content/drive/MyDrive/research-engine
 !pip install -q -r requirements.txt
 ```
-
-Build the data once (skip if `data/processed/` is already there):
-
 ```
-!python ingest/download_qasper.py
-!python ingest/build_chunks.py
-```
-
-Reproduce the held-out number (use a GPU runtime):
-
-```
-!python -m eval.run_retrieval_eval --split test     # final ev_recall@5 = 0.795, prints REPRODUCED
-!python -m eval.run_retrieval_eval --split dev --diagnostics
-!python -m eval.run_retrieval_eval --limit 100      # quick smoke test
+!python ingest/download_qasper.py && python ingest/build_chunks.py      # data, once
+!python -m eval.run_retrieval_eval --split test                          # 0.795, prints REPRODUCED
+!python -m eval.run_agent_eval --n 100 --split test --tag v2 --resume    # needs GROQ_API_KEY
+!python -m eval.judge_agent_eval results/agent_eval_test_n100_v2.jsonl --resume
+!python -m eval.run_cross_paper_eval && python -m eval.run_cross_paper_agent_eval --prompt v2 --tag v2 --resume
+!python -m eval.run_agent_eval --n 50 --tag v3hop --multihop --resume    # multi-hop ablation (dev)
+!python -m eval.token_report && python docs/make_charts.py
+!python -m pytest -q
 ```
 
-Chunk embeddings and reranker scores are cached in `cache/` under the same file names the Day 3/4 scripts used,
-so an existing Day 4 cache is picked up and the test run finishes in about a minute. Pass `--refresh-cache` to
-re-run the cross-encoder.
+Keys live in Colab Secrets (`GROQ_API_KEY`, optional `GEMINI_API_KEY`) and are copied into the environment once per
+session; nothing secret is stored in the repository. Use a GPU runtime for the reranker.
 
-Use the retriever from code:
+## Credits
 
-```python
-from retrieval import retrieve
-
-hits = retrieve("What baselines do they compare against?", paper_id="1909.00694", k=5)
-for h in hits:
-    print(h["rank"], round(h["score"], 3), h["chunk_id"], h["section"])
-```
-
-or from the shell: `python -m retrieval "What baselines do they compare against?" --paper-id 1909.00694`.
-`paper_id=None` searches the whole corpus. Each hit has `rank, chunk_id, paper_id, title, section,
-section_type, score, text`.
-
-## FAISS for corpus-wide dense search (Day 10)
-
-Corpus-wide dense search (`paper_id=None`, the cross-paper setting) goes through a FAISS index over the cached
-bge-small-en-v1.5 chunk embeddings. `RetrievalConfig.corpus_index` picks the backend: `"flat"` (default,
-`IndexFlatIP`, exact), `"hnsw"` (`IndexHNSWFlat`, approximate; saved to `cache/faiss_hnsw_*.index`), or
-`"numpy"` (the Day 3 search). Embeddings are unit length, so inner product = cosine, the same score as before.
-Within-paper search (about 18 chunks per paper) stays exact numpy and never builds a FAISS index, so the
-frozen within-paper results above are unchanged.
-
-```
-!python -m eval.benchmark_faiss            # results/faiss_benchmark.md: flat vs numpy, HNSW M x efSearch grid
-```
-
-The benchmark encodes every dev/test question once, then compares all backends on the same vectors: whether
-FAISS flat returns the same top-k as numpy (it may swap items whose scores differ only by float rounding,
-~1e-7), gold evidence metrics, ANN recall@k of HNSW against exact search, build time, index size, and search
-latency per query.
-
-
-## Cross-paper questions (Day 11)
-
-QASPER questions always belong to one paper. To measure the cross-paper mode, `eval/cross_paper_questions.jsonl`
-holds 19 hand-written questions that need several papers: 10 about a dataset ("Which papers run experiments on
-HotpotQA, and what does each propose?") and 9 about a topic (sarcasm detection, code-switching, question generation,
-fake news, ...). Each question lists `required_papers` (the paper runs experiments on the dataset, or the topic is
-its main subject; checked by hand) and `acceptable_papers` (minor mentions: not required, not penalised); 7.6
-required papers per question on average. The set was fixed before any cross-paper system was built.
-
-`retrieval/cross_paper.py` searches the whole corpus (BM25 + FAISS dense, RRF, optional cross-encoder) and groups
-the ranked chunks by paper. `python -m eval.run_cross_paper_eval` scores paper recall@5/10/20, precision@10 and MRR
-(`--no-rerank` skips the cross-encoder, which needs a GPU to be quick).
-
-Results (19 questions, `results/cross_paper_retrieval.md`): paper recall@10 is 0.713 for BM25, 0.725 for dense,
-0.735 for hybrid and **0.840 for hybrid + reranker** (recall@20 0.959, MRR 0.974). BM25 is better on dataset
-questions (exact names), dense on topic questions (paraphrases); the cross-encoder helps on 18 of 19 questions.
-
-**Cross-paper agent** (`agent/cross_paper.py`, a second LangGraph graph; the within-paper agent is unchanged):
-`retrieve_papers` (hybrid + reranker, top 10 papers x 2 passages) -> `synthesize` (one bullet per relevant paper,
-`[E#]` citations mapped back to chunks and papers). `python -m eval.run_cross_paper_agent_eval` runs it on the 19
-questions (papers shown vs cited, cited-paper precision; `--resume` after a daily-limit stop) and
-`python -m eval.judge_cross_paper results/cross_paper_agent.jsonl` checks citation support and faithfulness.
-
-## Research agent (Day 6)
-
-A LangGraph graph over the retriever:
-
-```
-question -> decompose (LLM, JSON: up to 3 sub-questions)
-         -> retrieve  (question's top 5 first, then sub-question results via RRF, up to 7 = E1..E7)
-         -> answer    (LLM answers from the evidence only, citing [E#] after each claim)
-```
-
-Citation labels are mapped back to chunk IDs, so every citation can be checked against QASPER's gold evidence.
-Each LLM call logs prompt/completion tokens and latency. LLM: Groq `openai/gpt-oss-120b` with low reasoning effort (free API key). The model is one line in `agent/config.py`;
-list the models your key can use with `Groq().models.list()`.
-
-Setup in Colab: get a key at console.groq.com -> API Keys, then add a Colab secret named `GROQ_API_KEY`.
-Commands run with `!python` can't read Colab secrets, so copy the key into an environment variable once per session:
-
-```python
-import os
-from google.colab import userdata
-os.environ["GROQ_API_KEY"] = userdata.get("GROQ_API_KEY").strip()
-```
-
-```
-!python -m agent "What datasets do they evaluate on?" --paper-id 1909.00694
-!python -m eval.run_agent_eval --n 5      # smoke test
-!python -m eval.run_agent_eval --n 20     # Day 6 numbers on dev (tune here)
-!python -m eval.run_agent_eval --n 50 --tag v2 --resume   # continue a run stopped by Groq's daily token limit
-!python -m eval.run_agent_eval --n 50 --split test   # once, at the end
-```
-
-Groq's free tier allows about 200k tokens per day per model (about 65 agent questions with gpt-oss-120b). Eval
-results are written one question at a time; if the daily limit is hit the run stops cleanly, and `--resume`
-continues later. An existing results file is never overwritten without `--resume` or `--overwrite`.
-
-```python
-from agent import ResearchAgent
-out = ResearchAgent().run("What baselines do they compare against?", paper_id="1909.00694")
-print(out["answer"], out["cited_chunk_ids"])
-```
-
-Review the misses side by side with the gold passages (also saved as `*_review.md`):
-
-```
-!python -m eval.inspect_agent_eval results/agent_eval_dev_n20.jsonl
-```
-
-Citation precision (share of cited chunks that are gold evidence) is a strict measure: a passage can support
-a claim without being one of QASPER's annotated evidence paragraphs. The LLM judge reads what was actually
-cited and scores citation support, faithfulness and answer correctness. It uses a different Groq model from the
-agent (own daily quota, no self-grading) and only reads the saved `.jsonl`, so the agent is not re-run:
-
-```
-!python -m eval.judge_agent_eval results/agent_eval_dev_n20_v2.jsonl          # judge = openai/gpt-oss-20b
-!python -m eval.judge_agent_eval results/agent_eval_dev_n20_v2.jsonl --model qwen/qwen3.8-27b
-!python -m eval.judge_agent_eval results/agent_eval_dev_n20_v2.jsonl --model gemini-3.8-flash   # Gemini API
-```
-
-`agent/llm.py` has two providers behind one `chat()` interface: Groq (`GroqLLM`) and the Google Gemini API
-(`GeminiLLM`, needs a `GEMINI_API_KEY` env var or Colab secret). `make_llm(model)` picks Gemini for model names
-starting with `gemini`. A Gemini judge is a different model family from the gpt-oss agent, so it is not
-grading its own kind of output. Gemini 3 models are run at their default temperature (Google advises against
-lowering it), so Gemini verdicts are not fully deterministic. Per-minute 429s are waited out; a per-day quota
-stops the run cleanly and `--resume` continues.
-
-Two judges on the same answers, with exact agreement, Cohen's kappa and every disagreement listed:
-
-```
-!python -m eval.compare_judges results/agent_eval_dev_n20_v2_judge-gpt-oss-20b.jsonl \
-                               results/agent_eval_dev_n20_v2_judge-gemini-38-flash.jsonl
-```
-
-**Reference-quality filter.** Some QASPER reference answers only point elsewhere ("BIBREF9 ; BIBREF8",
-"the same datasets as BIBREF7", "Answer with content missing ..."), so no answer can match them. A fixed,
-mechanical rule (`eval/reference_filter.py`, decided before the test run) excludes a question when all its
-references are like that. Every agent and judge summary reports both the full and the filtered numbers
-(`summary` and `summary_filtered`). On dev n=50 it excludes 3 questions (Q27, Q39, Q45). To see it on any
-saved results file: `!python -m eval.reference_filter results/agent_eval_dev_n50_v2.jsonl`.
-
-## Roadmap
-
-- [x] Ingest + section-aware chunking with gold evidence mapping (Days 1-2)
-- [x] BM25, dense, hybrid retrieval (Day 3)
-- [x] Cross-encoder reranking, section filtering (Day 4)
-- [x] Refactor into `retrieval/` and `eval/` packages (Day 5)
-- [x] First LangGraph agent: query decomposition, fused retrieval, cited answers, citation eval (Day 6)
-- [x] FAISS index for corpus-wide dense search, benchmarked against numpy (Day 10)
-- [ ] Multi-hop: sufficiency check that loops back to retrieval; cross-paper evidence aggregation
-- [ ] Cited answer generation + citation accuracy on 100 research queries
-- [ ] LLMOps evaluation: faithfulness, citation accuracy, retrieval quality, token efficiency
+Data: [QASPER](https://allenai.org/data/qasper) (Dasigi et al., 2021), CC BY 4.0. Models: BAAI bge-small-en-v1.5,
+BAAI bge-reranker-v2-m3, cross-encoder/ms-marco-MiniLM-L-6-v2, OpenAI gpt-oss-120b and gpt-oss-20b (via Groq),
+Google Gemini. Built with LangGraph, FAISS, sentence-transformers, rank-bm25 and Gradio.

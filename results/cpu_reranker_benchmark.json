@@ -1,0 +1,10 @@
+{
+  "what": "Cross-encoder latency on CPU (Colab, 2 CPU cores, torch threads = 2 unless noted), rerank of real QASPER chunks; quality = dev evidence Recall@5 of the final pipeline (887 questions, GPU run). Measured 2026-10-20 with app/bench_cpu.py and eval/run_retrieval_eval.py --reranker.",
+  "rerankers": [
+    {"model": "BAAI/bge-reranker-v2-m3", "params_m": 568, "max_length": 512, "dev_r5": 0.793, "cpu_s_30": 105.3, "cpu_s_100": 323.5, "note": "frozen pipeline; CPU run used 1 torch thread", "results_file": "day4_rerank_dev_paper_bge-reranker-v2-m3_no-abstract.json"},
+    {"model": "cross-encoder/ms-marco-MiniLM-L-6-v2", "params_m": 22, "max_length": 512, "dev_r5": 0.770, "cpu_s_30": 3.9, "cpu_s_100": 13.2, "results_file": "retrieval_eval_dev_paper_rr-ms-marco-MiniLM-L-6-v2.json"},
+    {"model": "cross-encoder/ms-marco-MiniLM-L-12-v2", "params_m": 33, "max_length": 512, "dev_r5": 0.776, "cpu_s_30": 7.7, "cpu_s_100": 25.7, "results_file": "retrieval_eval_dev_paper_rr-ms-marco-MiniLM-L-12-v2.json"},
+    {"model": "BAAI/bge-reranker-base", "params_m": 278, "max_length": 256, "dev_r5": 0.691, "cpu_s_30": 13.8, "cpu_s_100": 43.0, "results_file": "retrieval_eval_dev_paper_rr-bge-reranker-base_len256.json"}
+  ],
+  "no_reranker_dev_r5": 0.747
+}
