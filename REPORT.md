@@ -10,7 +10,7 @@ LangGraph agent's citations support their sentences **95.6%** of the time by an 
 single annotated paragraph counts), with **96.9%** faithfulness and **83%** answer correctness on 100 test
 questions at about 3k tokens per question. A cross-paper agent finds 84% of the required papers for 19 hand-labelled
 multi-paper questions, and 98% of the papers it cites are correct. A multi-hop extension was built and ablated: it
-did not help. The judge was validated against a judge from a second model family. All answers are published with
+did not help. Asked about the wrong paper (a false premise), the agent declines 28 of 30 times. The judge was validated against a judge from a second model family. All answers are published with
 their verdicts so every number can be checked.
 
 ## 1. Data
@@ -200,14 +200,33 @@ labels was scored on that one label (citation support 1.00 instead of 0.12). Mis
 and then count as a judge error; the fix is unit-tested and the within-paper test run was checked to be unaffected
 (0 such answers).
 
-**Premise mismatch (not measured).** Asked "Why are current ELS's not sufficiently effective?" about a hate-speech
-paper that never mentions ELS (the acronym belongs to another paper), the agent expanded it as "early language
-systems" and cited a real but unrelated sentence instead of declining:
+**Premise mismatch, found in the app and then measured.** Asked "Why are current ELS's not sufficiently
+effective?" about a hate-speech paper that never mentions ELS (the acronym belongs to another paper), the agent
+expanded it as "early language systems" and cited a real but unrelated sentence instead of declining:
 
 ![Premise-mismatch hallucination](docs/limitation_premise_mismatch.png)
 
-QASPER never asks a question about the wrong paper, so the decline rate under false premises is unknown. A small
-robustness set (questions paired with a wrong paper) and a premise check before answering are the next steps.
+QASPER never asks a question about the wrong paper, so a robustness set was built for it
+(`eval/run_mismatch_eval.py`, design fixed before running). Dev questions that contain a specific term (a
+capitalised name or acronym such as *NCEL*, *TIMIT*, *Dabiq*) found in their own paper are paired (seed 0) with a
+random other paper whose text never contains that term, and the **frozen** agent answers on the wrong paper. The
+correct behaviour is to decline or to say the term is not in the paper; gpt-oss-20b labels each answer declined /
+flagged / hallucinated, and the agent's exact decline sentence is also counted without any LLM.
+
+| 30 wrong-paper questions (dev) | |
+|---|---|
+| declined (all with the exact decline sentence) | **28 (93%)**, 95% CI ≈ 79–98% |
+| answered but flagged the missing premise | 0 |
+| hallucinated | 2 (7%) |
+| agent tokens / question | 2,905 |
+
+The decline is not indiscriminate: on the 100 test questions about the *right* paper the same agent declined only
+3%. Of the two hallucinations, one is a real failure: asked "How effective is their NCEL approach overall?" about a
+topic-model paper, the agent described that paper's own method as "the NCEL approach". The other ("What NLP tasks
+do they consider?") is a weakness of the term filter rather than of the agent: *NLP* is the field, not a premise,
+and the answer lists tasks the wrong paper really studies. So the ELS case is real but rare (1–2 in 30). The
+robustness set has no flagged answers: the agent either declines outright or goes along with the premise, which
+is why a premise check before answering ("does this paper mention X?") is the targeted fix.
 
 ## 6. Limitations
 
@@ -221,7 +240,8 @@ robustness set (questions paired with a wrong paper) and a premise check before 
 
 ## 7. Future work
 
-Per-paper map-reduce synthesis for cross-paper questions; a premise check and a wrong-paper robustness set; list
+Per-paper map-reduce synthesis for cross-paper questions; a premise check before answering (measured against the
+wrong-paper set above); list
 completeness prompting or a verifier pass for "which X" questions; evaluating the multi-hop check only when
 first-pass retrieval confidence is low.
 
@@ -229,4 +249,4 @@ first-pass retrieval confidence is low.
 
 Every number above comes from a file in `results/` (agent and judge outputs per question, summary JSONs, judge
 agreement report, token report, CPU benchmark). The Colab notebooks in `notebooks/` record each step with a
-WHAT/WHY note per cell; the commands are in the README. 66 tests run in CI on every push.
+WHAT/WHY note per cell; the commands are in the README. 70 tests run in CI on every push.

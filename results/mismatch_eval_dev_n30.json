@@ -1,0 +1,16 @@
+{
+  "n_planned": 30,
+  "complete": true,
+  "stopped_reason": null,
+  "seed": 0,
+  "summary": {
+    "n": 30,
+    "n_judged": 30,
+    "exact_decline_rate": 0.9333,
+    "declined_rate": 0.9333,
+    "flagged_rate": 0.0,
+    "hallucinated_rate": 0.0667,
+    "safe_rate": 0.9333,
+    "avg_agent_tokens": 2905
+  }
+}

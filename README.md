@@ -19,6 +19,7 @@ evaluated with an **LLM-as-judge pipeline validated against a second model famil
 | cross-paper evidence aggregation | **84%** of required papers retrieved in the top 10 (BM25 71%); **98%** of cited papers correct |
 | LLM-as-judge validity | **82%** verdict agreement with a judge from another model family (Gemini); headline numbers use the stricter one |
 | multi-hop retrieval | built and ablated on dev: **no gain** at +46% tokens, so the single-pass agent stays the default |
+| robustness to false premises | asked about the **wrong paper**, the agent declines **28 of 30** (93%); on matching questions it declines only 3% |
 | token efficiency | **~3.0k tokens / question** (2 LLM calls); full table [below](#token-efficiency) |
 
 ![Results explorer: a cross-paper answer with required papers, citations and per-paper judge verdicts](docs/explorer_cross_paper.png)
@@ -185,16 +186,20 @@ bge-reranker-base at 256 tokens is worse than no reranker at all. All reported r
 * **Reference-quality filter.** A fixed rule, decided before the test run, drops questions whose QASPER references
   only point elsewhere ("BIBREF9 ; BIBREF8"); every summary reports full and filtered numbers (it excluded 0 of the
   100 test questions).
-* **Engineering.** 66 pytest tests (no GPU, models, data or keys: citation parsing, metrics, retrieval pieces,
+* **Engineering.** 70 pytest tests (no GPU, models, data or keys: citation parsing, metrics, retrieval pieces,
   both judges, both LangGraph graphs end to end with fakes, the app's engine and fallback) run in GitHub Actions on
   every push.
 
 ## Limitations
 
-* **Premise mismatch.** Asked about something a paper does not contain (an acronym from another paper), the agent
-  can invent a meaning and cite a real but unrelated sentence instead of declining. QASPER questions always match
-  their paper, so this is not measured.
+* **Premise mismatch (rare, measured).** Asked about something a paper does not contain (an acronym from another
+  paper), the agent can invent a meaning and cite a real but unrelated sentence instead of declining:
   ![The agent invents an expansion for "ELS" on a paper that never mentions it](docs/limitation_premise_mismatch.png)
+  QASPER questions always match their paper, so a robustness set was built (`python -m eval.run_mismatch_eval`):
+  30 dev questions with a specific term (e.g. *NCEL*, *TIMIT*) asked about a random paper that never contains it.
+  The frozen agent **declined 28 (93%, 95% CI ≈ 79–98%)** and went along with the premise twice, one of them
+  arguably fine ("What NLP tasks do they consider?"). It never answers *and* flags the missing term, so a premise
+  check before answering is the targeted fix ([details](REPORT.md#5-error-analysis)).
 * The judge is an LLM; agreement with a second family and the manual checks bound, but do not remove, its error.
 * The cross-paper set is small (19 questions) and its v2 prompt is not held out; v1 is the reported untuned result.
 * Test latency is not reported: part of the test run had to use a CPU; per-question time is mostly API pacing.
@@ -206,9 +211,9 @@ ingest/       download QASPER; section-aware chunks + gold chunk IDs
 retrieval/    BM25, dense (+ FAISS), RRF, cross-encoder, pipeline (frozen Day 4 settings), cross-paper retriever
 agent/        LangGraph graphs: graph.py (one paper), multihop.py, cross_paper.py; llm.py (Groq, Gemini, fallback)
 eval/         retrieval eval, agent eval, judges, judge agreement, reference filter, FAISS benchmark,
-              cross-paper evals, token report; cross_paper_questions.jsonl (19 labelled questions)
+              cross-paper evals, wrong-paper robustness eval, token report; cross_paper_questions.jsonl
 app/          Gradio app, engine, rendering, examples builder, CPU benchmark, Space deploy (Gradio + static explorer)
-tests/        66 pytest tests (CI: .github/workflows/tests.yml)
+tests/        70 pytest tests (CI: .github/workflows/tests.yml)
 results/      every metric JSON / JSONL behind the numbers above, plus results-log.md
 docs/         charts (make_charts.py) and screenshots
 notebooks/    the Colab notebooks, one per day of work, with WHAT/WHY notes in every cell
@@ -229,6 +234,7 @@ from google.colab import drive; drive.mount("/content/drive")
 !python -m eval.judge_agent_eval results/agent_eval_test_n100_v2.jsonl --resume
 !python -m eval.run_cross_paper_eval && python -m eval.run_cross_paper_agent_eval --prompt v2 --tag v2 --resume
 !python -m eval.run_agent_eval --n 50 --tag v3hop --multihop --resume    # multi-hop ablation (dev)
+!python -m eval.run_mismatch_eval --n 30 --resume                        # wrong-paper robustness (dev)
 !python -m eval.token_report && python docs/make_charts.py
 !python -m pytest -q
 ```
