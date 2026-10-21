@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research Evidence Engine — results explorer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%234f46e5%22/%3E%3Ctext x=%2216%22 y=%2222%22 font-size=%2216%22 text-anchor=%22middle%22 fill=%22white%22 font-family=%22sans-serif%22%3EE%3C/text%3E%3C/svg%3E">
+<meta name="description" content="Every evaluated answer of an agentic RAG system over 1,585 NLP papers, with citations, gold passages and LLM-judge verdicts.">
+<style>
+:root{
+  --bg:#f7f7f5;--panel:#ffffff;--ink:#1b1c1f;--muted:#5f6370;--line:#e3e3df;--accent:#4f46e5;--accent-soft:#eef0ff;
+  --ok:#15803d;--ok-soft:#e7f6ec;--mid:#a16207;--mid-soft:#fdf5e1;--bad:#b91c1c;--bad-soft:#fdecec;--gold:#8a6d00;--gold-soft:#fbf3cf;
+  --hop:#7c3aed;--hop-soft:#f1eafe;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#121316;--panel:#1a1c20;--ink:#e8e8ea;--muted:#a1a4ad;--line:#2c2f36;--accent:#8b8cff;--accent-soft:#23254a;
+  --ok:#4ade80;--ok-soft:#173222;--mid:#facc15;--mid-soft:#352d12;--bad:#f87171;--bad-soft:#3a1a1a;--gold:#facc15;--gold-soft:#332b0e;
+  --hop:#c4a5ff;--hop-soft:#2d2245;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent)}
+.wrap{max-width:1240px;margin:0 auto;padding:20px 16px 48px}
+header h1{font-size:1.55rem;margin:0 0 4px;letter-spacing:-.01em}
+header p{margin:0;color:var(--muted);max-width:900px}
+.note{margin-top:10px;font-size:.88rem;color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:18px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.card b{display:block;font-size:1.35rem;font-variant-numeric:tabular-nums}
+.card span{font-size:.8rem;color:var(--muted)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-top:6px;overflow-x:auto}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:9px 12px;font:inherit;color:var(--muted);cursor:pointer;white-space:nowrap}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.layout{display:grid;grid-template-columns:360px 1fr;gap:16px;margin-top:14px;align-items:start}
+@media (max-width:860px){.layout{grid-template-columns:1fr}}
+.listbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;position:sticky;top:10px}
+@media (max-width:860px){.listbox{position:static}}
+.filters{padding:10px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.filters input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:999px;padding:2px 10px;font-size:.8rem;cursor:pointer}
+.chip[aria-pressed=true]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.list{max-height:68vh;overflow:auto}
+@media (max-width:860px){.list{max-height:42vh}}
+.item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;color:inherit;padding:9px 12px;cursor:pointer;font:inherit}
+.item:hover{background:var(--bg)}
+.item[aria-current=true]{background:var(--accent-soft)}
+.item .q{font-size:.9rem;display:block}
+.item .sub{font-size:.75rem;color:var(--muted);display:flex;gap:6px;align-items:center;margin-top:3px;flex-wrap:wrap}
+.count{font-size:.8rem;color:var(--muted)}
+.detail{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;min-width:0}
+.detail h2{font-size:1.2rem;margin:0 0 4px}
+.meta{color:var(--muted);font-size:.86rem;margin-bottom:10px}
+.badge{display:inline-block;font-size:.72rem;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.b-yes{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.b-partly{background:var(--mid-soft);color:var(--mid);border-color:transparent}
+.b-no{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.b-gold{background:var(--gold-soft);color:var(--gold);border-color:transparent}
+.b-cited{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.b-hop{background:var(--hop-soft);color:var(--hop);border-color:transparent}
+.answer{font-size:1.02rem;line-height:1.6;margin:10px 0 6px}
+.answer ul{padding-left:1.2em;margin:.3em 0}
+a.cite{font-weight:600;text-decoration:none;background:var(--accent-soft);padding:0 3px;border-radius:4px}
+.cite.bad{color:var(--bad)}
+h3{font-size:.95rem;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.box{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:6px 0;background:var(--bg)}
+.refs li{margin:2px 0}
+details.ev{border:1px solid var(--line);border-radius:8px;margin:6px 0;background:var(--panel)}
+details.ev.is-cited{border-color:var(--accent)}
+details.ev:target{outline:2px solid var(--accent)}
+details.ev summary{cursor:pointer;padding:7px 10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.ev-text{padding:0 12px 10px;white-space:pre-wrap;font-size:.92rem}
+.ptable{width:100%;border-collapse:collapse;font-size:.88rem}
+.ptable td,.ptable th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
+.ptable th{color:var(--muted);font-weight:500}
+.pid{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+table.res{border-collapse:collapse;font-size:.9rem;margin:6px 0 14px}
+table.res td,table.res th{border-bottom:1px solid var(--line);padding:5px 10px;text-align:left}
+table.res td.n{font-variant-numeric:tabular-nums;text-align:right}
+.about{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-top:14px}
+.about p,.about li{max-width:880px}
+footer{margin-top:22px;color:var(--muted);font-size:.82rem}
+.empty{color:var(--muted);padding:20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Agentic Research &amp; Evidence Synthesis Engine</h1>
+  <p>Retrieval + LangGraph agents over <b>1,585 NLP papers</b> (QASPER). Browse every answer the system gave on its
+  evaluation sets: each claim cites a passage (click <b>[E#]</b>), QASPER's gold passages are marked, and an LLM judge
+  rated every citation, the faithfulness and the correctness.</p>
+  <p class="note">These are the saved answers from the evaluation runs (no live model calls on this free page). The
+  live Gradio app, all code and the report are on <a id="gh" href="https://github.com/Vanshika-0111/Research-engine">GitHub</a>.</p>
+</header>
+<div class="cards" id="cards"></div>
+<nav class="tabs" role="tablist" id="tabs">
+  <button role="tab" data-tab="paper">One paper · 100 held-out answers</button>
+  <button role="tab" data-tab="corpus">Across papers · 19</button>
+  <button role="tab" data-tab="multihop">Multi-hop ablation · 50 dev</button>
+  <button role="tab" data-tab="about">How it works &amp; results</button>
+</nav>
+<main id="main"></main>
+<footer>Data: QASPER (Dasigi et al., 2021), CC BY 4.0. Models: BAAI bge-small-en-v1.5, BAAI bge-reranker-v2-m3,
+OpenAI gpt-oss-120b (agent) and gpt-oss-20b (judge) via Groq; Google Gemini (second judge). Answers can be wrong:
+the judge verdicts and gold marks are there so you can check.</footer>
+</div>
+<script>
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pct = v => v == null ? "–" : (100 * v).toFixed(1) + "%";
+const num = v => v == null ? "–" : (+v).toFixed(3);
+let DATA = null, state = {tab: "paper", id: null, filter: "all", search: ""};
+
+// QASPER keeps the papers' LaTeX: show "$71.0\%$" as "71.0%", "\partial" as "∂" (display only)
+const TEX = [["\\mathbb{R}","ℝ"],["\\mathbb {R}","ℝ"],["\\partial","∂"],["\\nabla","∇"],["\\Vert","‖"],["\\vert","|"],
+  ["\\top","⊤"],["\\in","∈"],["\\times","×"],["\\cdot","·"],["\\pm","±"],["\\approx","≈"],["\\leq","≤"],["\\geq","≥"],
+  ["\\le","≤"],["\\ge","≥"],["\\neq","≠"],["\\sim","~"],["\\sum","Σ"],["\\infty","∞"],["\\rightarrow","→"],["\\to","→"],
+  ["\\alpha","α"],["\\beta","β"],["\\gamma","γ"],["\\delta","δ"],["\\epsilon","ε"],["\\theta","θ"],["\\lambda","λ"],
+  ["\\mu","μ"],["\\sigma","σ"],["\\tau","τ"],["\\phi","φ"],["\\log","log"],["\\exp","exp"],["\\left",""],["\\right",""],
+  ["\\%","%"],["\\&","&"],["\\_","_"],["\\,"," "],["\\;"," "]];
+function cleanTex(t) {
+  t = String(t ?? "").replace(/\$([^$\n]{1,120})\$/g, (_, m) => {
+    for (const [k, v] of TEX) m = m.split(k).join(v);
+    return m.replace(/\\(?:mathrm|mathbf|mathit|textrm|textbf|text|operatorname|mathcal)\s*/g, "").replace(/[{}]/g, "").trim();
+  });
+  return t.split("\\%").join("%").split("\\&").join("&").split("\\_").join("_");
+}
+function inline(text, valid, uid) {
+  let t = esc(cleanTex(text)).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  return t.replace(/\[(E\d+)\]/g, (m, lab) => valid.has(lab)
+    ? `<a class="cite" href="#ev-${uid}-${lab}" data-ev="ev-${uid}-${lab}">[${lab}]</a>`
+    : `<span class="cite bad" title="label not in the evidence">[${lab}]</span>`);
+}
+function answerHtml(answer, labels, uid) {
+  const valid = new Set(labels), out = []; let items = [];
+  for (const line of String(answer || "").split("\n")) {
+    if (!line.trim()) continue;
+    const m = line.match(/^\s*(?:[-*•]|\d+[.)])\s+/);
+    if (m) { items.push(`<li>${inline(line.slice(m[0].length), valid, uid)}</li>`); continue; }
+    if (items.length) { out.push(`<ul>${items.join("")}</ul>`); items = []; }
+    out.push(`<p>${inline(line.trim(), valid, uid)}</p>`);
+  }
+  if (items.length) out.push(`<ul>${items.join("")}</ul>`);
+  return `<div class="answer">${out.join("") || "<p><i>No answer.</i></p>"}</div>`;
+}
+const vbadge = (v, label) => v ? `<span class="badge b-${esc(v)}">${label ? esc(label) + ": " : ""}${esc(v)}</span>` : "";
+
+function status(it) {
+  if (it.declined) return "declined";
+  return it.judge.correct || "unjudged";
+}
+
+// ---------------------------------------------------------------- cards + about
+function cards() {
+  const s = DATA.summary, r = s.retrieval || {}, j = s.judge || {}, c = s.cross || {}, cr = s.cross_retrieval || {};
+  const cs = [
+    [num(r.final), "evidence Recall@5 · 1,309 test questions (BM25 " + num(r.bm25) + ")"],
+    [pct(j.judged_citation_precision), "citation accuracy, LLM-judged · strict vs gold " + pct(j.strict_citation_precision)],
+    [pct(j.faithfulness), "faithfulness · 100 test questions"],
+    [pct(j.answer_correctness), "answer correctness · 100 test questions"],
+    [pct(cr["hybrid+rerank"]), "required papers in top 10 · cross-paper (BM25 " + pct(cr.bm25) + ")"],
+  ];
+  $("#cards").innerHTML = cs.map(([v, l]) => `<div class="card"><b>${v}</b><span>${esc(l)}</span></div>`).join("");
+}
+function about() {
+  const s = DATA.summary, r = s.retrieval || {}, j = s.judge || {}, c = s.cross || {}, mh = s.multihop || {};
+  const v2 = mh.v2 || {}, v3 = mh.v3hop || {};
+  const row = (a, b, n) => `<tr><td>${esc(a)}</td><td class="n">${b}</td>${n !== undefined ? `<td class="n">${n}</td>` : ""}</tr>`;
+  return `<section class="about">
+  <h3>Pipeline</h3>
+  <p><b>Retrieval:</b> papers split into section-aware chunks (28.5k) → BM25 + dense (bge-small-en-v1.5; FAISS for
+  corpus-wide search) → reciprocal rank fusion → cross-encoder reranking (bge-reranker-v2-m3) → abstracts dropped.</p>
+  <p><b>One-paper agent (LangGraph):</b> <code>decompose → retrieve → answer</code>. The question is split into up to 3
+  search queries; the question's own top 5 passages always go in first, sub-query results fill the rest (7 passages,
+  E1–E7); gpt-oss-120b answers only from them and cites [E#] after every claim.</p>
+  <p><b>Cross-paper agent (LangGraph):</b> <code>retrieve_papers → synthesize</code>: corpus-wide hybrid search +
+  reranking, grouped into the top 10 papers × 2 passages; one cited bullet per relevant paper.</p>
+  <p><b>Evaluation:</b> choices made on dev, test run once. An LLM judge (gpt-oss-20b) rates every citation
+  (supports its sentence?), faithfulness and correctness against QASPER's references; it was validated against a
+  second judge from a different model family (Gemini): 82% agreement, gpt-oss-20b the stricter one.</p>
+  <h3>Held-out retrieval (1,309 test questions)</h3>
+  <table class="res"><tr><th>system</th><th>evidence Recall@5</th></tr>
+  ${row("BM25", num(r.bm25))}${row("dense (bge-small)", num(r.dense))}${row("hybrid (RRF)", num(r.hybrid_rrf))}
+  ${row("+ cross-encoder rerank", num(r["hybrid+rerank"]))}${row("+ abstracts excluded (final)", "<b>" + num(r.final) + "</b>")}</table>
+  <h3>Held-out agent (100 test questions)</h3>
+  <table class="res">${row("citation accuracy, LLM-judged", pct(j.judged_citation_precision))}
+  ${row("citation precision, strict vs QASPER gold", pct(j.strict_citation_precision))}
+  ${row("faithfulness", pct(j.faithfulness))}${row("answer correctness (all / answered)", pct(j.answer_correctness) + " / " + pct(j.answer_correctness_answered_only))}
+  ${row("tokens per question", (s.agent.avg_prompt_tokens ?? "–") + " + " + (s.agent.avg_completion_tokens ?? "–"))}</table>
+  <p>Strict precision counts only QASPER's annotated passage; the judge accepts any passage that states the fact.
+  A manual review found most strict "misses" were valid support.</p>
+  <h3>Cross-paper (19 hand-labelled questions)</h3>
+  <table class="res">${row("required papers shown to the LLM", pct(c.retrieved_paper_recall))}
+  ${row("required papers cited in the answer", pct(c.cited_paper_recall))}${row("cited papers that are correct", pct(c.cited_paper_precision))}
+  ${row("citation support (judge)", pct(c.judged_citation_precision))}</table>
+  <h3>Multi-hop ablation (50 dev questions)</h3>
+  <table class="res"><tr><th></th><th>single pass</th><th>multi-hop</th></tr>
+  ${row("evidence recall", num(v2.evidence_recall), num(v3.evidence_recall))}
+  ${row("answer correctness", pct(v2.answer_correctness), pct(v3.answer_correctness))}
+  ${row("prompt tokens / question", v2.avg_prompt_tokens ?? "–", v3.avg_prompt_tokens ?? "–")}
+  ${row("searched again", "–", pct(v3.hop_rate))}</table>
+  <p>No answer cited a passage found by the extra search, and correctness rose as much on questions that did not
+  search again: the difference is run-to-run noise (about ±10 points at n=50). The single-pass agent stays the default.</p>
+  <h3>Known limitation</h3>
+  <p>When a question's premise does not exist in the chosen paper (an acronym from another paper), the agent can invent
+  a meaning instead of declining. QASPER questions always match their paper, so this was not measured.</p>
+  </section>`;
+}
+
+// ---------------------------------------------------------------- list
+const FILTERS = {
+  paper: [["all","all"],["yes","correct"],["partly","partly"],["no","wrong"],["declined","declined"],["unfaithful","not fully faithful"]],
+  multihop: [["all","all"],["hopped","searched again"],["yes","correct"],["no","wrong"]],
+  corpus: [["all","all"],["dataset","dataset questions"],["topic","topic questions"]],
+};
+function matches(it) {
+  const f = state.filter, q = state.search.trim().toLowerCase();
+  if (q && !(it.q.toLowerCase().includes(q) || (it.title || "").toLowerCase().includes(q))) return false;
+  if (f === "all") return true;
+  if (state.tab === "corpus") return it.type === f;
+  if (f === "hopped") return it.hops > 0;
+  if (f === "unfaithful") return it.judge.faithful && it.judge.faithful !== "yes";
+  return status(it) === f;
+}
+function listItem(it) {
+  const cur = it.id === state.id;
+  let sub = "";
+  if (state.tab === "corpus") {
+    sub = `<span class="badge">${esc(it.type)}</span><span>${it.cited_papers.length} papers cited · ${pct(it.metrics.cited_paper_recall)} of required</span>${vbadge(it.judge.faithful, "faithful")}`;
+  } else {
+    sub = `${it.declined ? '<span class="badge">declined</span>' : vbadge(it.judge.correct, "correct")}${vbadge(it.judge.faithful, "faithful")}`
+      + (it.hops ? '<span class="badge b-hop">searched again</span>' : "")
+      + `<span>${esc((it.title || "").slice(0, 46))}</span>`;
+  }
+  return `<button class="item" data-id="${esc(it.id)}" aria-current="${cur}"><span class="q">${esc(it.q)}</span><span class="sub">${sub}</span></button>`;
+}
+
+// ---------------------------------------------------------------- detail
+function evidencePaper(it, uid) {
+  const cited = new Set(it.cited), gold = new Set(it.gold), hops = it.ev_hops || [];
+  return it.ev.map((cid, i) => {
+    const lab = "E" + (i + 1), [sec, text] = DATA.chunks[cid] || ["?", "(passage text not in this build)"];
+    const v = it.judge.cites[cid];
+    const b = (cited.has(cid) ? '<span class="badge b-cited">cited</span>' : "")
+      + (gold.has(cid) ? '<span class="badge b-gold">QASPER gold</span>' : "")
+      + (v ? vbadge(v, "judge") : "") + (hops[i] ? '<span class="badge b-hop">found by follow-up search</span>' : "");
+    return `<details class="ev${cited.has(cid) ? " is-cited" : ""}" id="ev-${uid}-${lab}"${cited.has(cid) ? " open" : ""}>
+      <summary><b>[${lab}]</b> ${esc(sec)} ${b}</summary><div class="ev-text">${esc(cleanTex(text))}</div></details>`;
+  }).join("");
+}
+function detailPaper(it) {
+  const uid = it.id, labels = it.ev.map((_, i) => "E" + (i + 1));
+  const nGold = it.cited.filter(c => it.gold.includes(c)).length;
+  const j = it.judge;
+  return `<article class="detail">
+    <h2>${esc(it.q)}</h2>
+    <div class="meta"><a href="https://arxiv.org/abs/${esc(it.paper_id)}" target="_blank" rel="noopener">${esc(it.title || it.paper_id)}</a>
+      <span class="pid">${esc(it.paper_id)}</span></div>
+    <div>${it.declined ? '<span class="badge">declined</span> ' : ""}${vbadge(j.correct, "correct")} ${vbadge(j.faithful, "faithful")}
+      <span class="badge">${it.cited.length} cited · ${nGold} QASPER gold</span> <span class="badge">${it.tokens.toLocaleString()} tokens</span></div>
+    ${answerHtml(it.answer, labels, uid)}
+    <h3>Reference answers (QASPER annotators)</h3>
+    <div class="box"><ul class="refs">${(it.refs || []).map(r => `<li>${esc(cleanTex(r))}</li>`).join("") || "<li>(none)</li>"}</ul></div>
+    ${(j.note || (j.unsupported || []).length) ? `<h3>Judge (gpt-oss-20b)</h3><div class="box">${esc(j.note)}${(j.unsupported || []).length ? "<ul>" + j.unsupported.map(u => `<li>unsupported: ${esc(u)}</li>`).join("") + "</ul>" : ""}</div>` : ""}
+    <h3>What the agent did</h3>
+    <div class="box">Search queries: ${(it.subs || []).map(esc).join(" · ") || "–"}
+      ${it.hops !== undefined ? `<br>Sufficiency check: ${it.hops ? `missing "${esc(it.missing)}" → follow-up search "${esc(it.follow_up)}"` : "evidence judged enough, no extra search"}` : ""}</div>
+    <h3>Evidence passages shown to the LLM</h3>${evidencePaper(it, uid)}
+  </article>`;
+}
+function detailCorpus(it) {
+  const uid = it.id, labels = it.ev.map(e => e.l), cited = new Set(it.cited), citedP = new Set(it.cited_papers);
+  const pp = it.judge.per_paper || {};
+  const rows = it.papers.map(p => `<tr><td>${p.rank}</td><td><a href="https://arxiv.org/abs/${esc(p.paper_id)}" target="_blank" rel="noopener">${esc(p.title)}</a> <span class="pid">${esc(p.paper_id)}</span></td>
+    <td>${p.role ? `<span class="badge ${p.role === "required" ? "b-gold" : ""}">${p.role}</span>` : ""}</td>
+    <td>${citedP.has(p.paper_id) ? '<span class="badge b-cited">cited</span>' : '<span class="badge">not used</span>'} ${pp[p.paper_id] ? vbadge(pp[p.paper_id], "judge") : ""}</td></tr>`).join("");
+  let cur = null;
+  const ev = it.ev.map(e => {
+    const head = e.pid !== cur ? (cur = e.pid, `<div class="meta" style="margin:12px 0 2px"><b>${esc(e.pl)}</b> ${esc((it.papers.find(p => p.paper_id === e.pid) || {}).title || e.pid)}</div>`) : "";
+    const v = (it.judge.cites || {})[e.l];
+    return head + `<details class="ev${cited.has(e.l) ? " is-cited" : ""}" id="ev-${uid}-${e.l}"${cited.has(e.l) ? " open" : ""}>
+      <summary><b>[${e.l}]</b> ${esc(e.sec)} ${cited.has(e.l) ? '<span class="badge b-cited">cited</span>' : ""}${v ? vbadge(v, "judge") : ""}</summary>
+      <div class="ev-text">${esc(cleanTex(e.text))}</div></details>`;
+  }).join("");
+  const m = it.metrics;
+  return `<article class="detail">
+    <h2>${esc(it.q)}</h2>
+    <div><span class="badge">${esc(it.type)} question</span> ${vbadge(it.judge.faithful, "faithful")}
+      <span class="badge">required papers shown ${pct(m.retrieved_paper_recall)} · cited ${pct(m.cited_paper_recall)}</span>
+      <span class="badge">cited papers correct ${pct(m.cited_paper_precision)}</span> <span class="badge">${it.tokens.toLocaleString()} tokens</span></div>
+    ${answerHtml(it.answer, labels, uid)}
+    ${it.judge.note ? `<h3>Judge (gpt-oss-20b)</h3><div class="box">${esc(it.judge.note)}</div>` : ""}
+    <h3>Papers found (top 10) · ${it.n_required} required for this question</h3>
+    <table class="ptable"><tr><th>#</th><th>paper</th><th>gold label</th><th>answer</th></tr>${rows}</table>
+    <h3>Evidence passages</h3>${ev}
+  </article>`;
+}
+
+// ---------------------------------------------------------------- render
+function render() {
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === state.tab));
+  if (state.tab === "about") { $("#main").innerHTML = about(); return; }
+  const all = DATA[state.tab] || [], shown = all.filter(matches);
+  if (!shown.some(i => i.id === state.id)) state.id = shown.length ? shown[0].id : null;
+  const it = all.find(i => i.id === state.id);
+  const chips = FILTERS[state.tab].map(([k, l]) => `<button class="chip" data-f="${k}" aria-pressed="${state.filter === k}">${l}</button>`).join("");
+  $("#main").innerHTML = `<div class="layout">
+    <aside class="listbox"><div class="filters">
+      <input id="search" type="search" placeholder="Search questions or paper titles" value="${esc(state.search)}" aria-label="Search">
+      <div class="chips">${chips}</div><div class="count">${shown.length} of ${all.length}</div></div>
+      <div class="list">${shown.map(listItem).join("") || '<div class="empty">No matches.</div>'}</div></aside>
+    ${it ? (state.tab === "corpus" ? detailCorpus(it) : detailPaper(it)) : '<article class="detail empty">Pick an answer.</article>'}
+  </div>`;
+  const s = $("#search");
+  s.addEventListener("input", e => { state.search = e.target.value; render(); const n = $("#search"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); });
+  const cur = $(".item[aria-current=true]"); if (cur) cur.scrollIntoView({block: "nearest"});
+}
+function setHash() { history.replaceState(null, "", `#${state.tab}${state.id ? "/" + state.id : ""}`); }
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-tab],[data-f],.item,a.cite");
+  if (!t) return;
+  if (t.dataset.tab) { state = {...state, tab: t.dataset.tab, id: null, filter: "all"}; render(); setHash(); }
+  else if (t.dataset.f) { state.filter = t.dataset.f; render(); }
+  else if (t.classList.contains("item")) { state.id = t.dataset.id; render(); setHash(); $(".detail").scrollIntoView({block: "start", behavior: "smooth"}); }
+  else if (t.classList.contains("cite")) {
+    e.preventDefault();
+    const d = document.getElementById(t.dataset.ev);
+    if (d) { d.open = true; d.scrollIntoView({block: "center", behavior: "smooth"}); d.animate([{outline: "2px solid var(--accent)"}, {outline: "2px solid transparent"}], {duration: 1600}); }
+  }
+});
+
+fetch("data.json").then(r => r.json()).then(d => {
+  DATA = d;
+  const [tab, id] = location.hash.slice(1).split("/");
+  if (["paper", "corpus", "multihop", "about"].includes(tab)) { state.tab = tab; state.id = id || null; }
+  cards(); render();
+}).catch(err => { $("#main").innerHTML = `<p class="empty">Could not load data.json: ${esc(err)}</p>`; });
+</script>
+</body>
+</html>
