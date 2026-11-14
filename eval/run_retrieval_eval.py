@@ -34,7 +34,7 @@ from retrieval.data import load_chunks, load_questions  # noqa: E402
 from retrieval.hybrid import rrf  # noqa: E402
 from retrieval.pipeline import RetrievalPipeline  # noqa: E402
 
-# numbers in claude/results-log.md (full split, paper scope, final pipeline)
+# numbers in results/results-log.md (full split, paper scope, final pipeline)
 EXPECTED_R5 = {"test": 0.795, "dev": 0.793}
 
 
