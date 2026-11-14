@@ -213,10 +213,11 @@ agent/        LangGraph graphs: graph.py (one paper), multihop.py, cross_paper.p
 eval/         retrieval eval, agent eval, judges, judge agreement, reference filter, FAISS benchmark,
               cross-paper evals, wrong-paper robustness eval, token report; cross_paper_questions.jsonl
 app/          Gradio app, engine, rendering, examples builder, CPU benchmark, Space deploy (Gradio + static explorer)
+experiments/  Day 3–4 exploration scripts (kept as a record)
 tests/        70 pytest tests (CI: .github/workflows/tests.yml)
 results/      every metric JSON / JSONL behind the numbers above, plus results-log.md
 docs/         charts (make_charts.py) and screenshots
-notebooks/    the Colab notebooks, one per day of work, with WHAT/WHY notes in every cell
+notebooks/    the Colab notebooks, one per day of work, with notes in every cell
 REPORT.md     method, evaluation design, results, error analysis, limitations
 ```
 
